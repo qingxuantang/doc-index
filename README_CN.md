@@ -4,7 +4,35 @@
 
 通过 nginx 服务 + basic auth（默认 ON）。一份 `config.yaml` 跑整个流程。
 
-[English README](./README.md) · MIT 协议 · 单 Python 文件扫描器 + 模板化 HTML
+[English README](./README.md) · [简体中文](./README_CN.md) · MIT 协议
+
+> **这是一个 Claude Code skill**。把仓库放到 `~/.claude/skills/doc-index/` 下，Claude Code 在你说"更新索引" / "刷新文档站" / "set up doc index for X project" 时会自动调用。也可以脱离 Claude Code 当作普通 Python CLI 用——两种用法等价。
+
+## 作为 Claude Code skill 安装
+
+```bash
+# 一次性安装
+git clone https://github.com/qingxuantang/doc-index.git ~/.claude/skills/doc-index
+
+# 然后在 Claude Code（或任何兼容 Claude Code skill 加载的 agent）里：
+#   "set up doc index for my project at ~/projects/foo"
+#   "更新索引"           # 刷新最近活跃的项目
+#   "把这个加到索引"      # 加文档 + 重新 scan
+```
+
+skill 的 [SKILL.md](./SKILL.md) 里声明了 auto-invoke 触发词，agent 自动接管，不用你记脚本路径。
+
+## 作为独立 CLI 安装（不用 Claude Code）
+
+```bash
+git clone https://github.com/qingxuantang/doc-index.git
+cd doc-index
+cp config.example.yaml /path/to/your-project/doc-index.yaml
+# 编辑 yaml
+python3 scripts/serve.py init /path/to/your-project/doc-index.yaml
+```
+
+功能完全一样——Claude Code 那层只是 auto-invoke 便利，不是功能依赖。
 
 ---
 

@@ -15,6 +15,36 @@ description: |
 
 Generate / maintain a PWA document index website from any project repo's folder structure.
 
+[English README](./README.md) · [简体中文](./README_CN.md) · MIT licensed
+
+> **This is a Claude Code skill.** Drop the repo into `~/.claude/skills/doc-index/` and Claude Code will auto-invoke it whenever you say "更新索引", "refresh doc index", or "set up doc index for X project". Or use the underlying scripts as a plain Python CLI — no Claude Code required.
+
+## Install as a Claude Code skill
+
+```bash
+# One-time install
+git clone https://github.com/qingxuantang/doc-index.git ~/.claude/skills/doc-index
+
+# Then in Claude Code (or any agent that loads Claude Code-style skills):
+#   "set up doc index for my project at ~/projects/foo"
+#   "更新索引"           # refresh the most recently active project
+#   "把这个加到索引"      # add a doc, then re-scan
+```
+
+The skill's [SKILL.md](./SKILL.md) declares auto-invoke triggers so the agent picks it up without you having to remember the script paths.
+
+## Install as a standalone CLI (no Claude Code)
+
+```bash
+git clone https://github.com/qingxuantang/doc-index.git
+cd doc-index
+cp config.example.yaml /path/to/your-project/doc-index.yaml
+# edit the yaml
+python3 scripts/serve.py init /path/to/your-project/doc-index.yaml
+```
+
+Works identically — the Claude Code wrapping is just an auto-invoke convenience, not a functional dependency.
+
 ## Project Registry (local)
 
 When you set up a new project's doc-index on this server, add it to the table below. This is your local routing hint — when a user just says "更新索引" without naming a project, resolve via this table.
