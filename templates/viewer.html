@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Viewer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #333; }
+        iframe, embed {
+            width: 100vw;
+            height: 100vh;
+            border: none;
+        }
+        .fallback {
+            color: #fff;
+            text-align: center;
+            padding: 40px;
+            font-family: system-ui, sans-serif;
+        }
+        .fallback a { color: #6cf; }
+    </style>
+</head>
+<body>
+    <div id="viewer"></div>
+    <script>
+        const params = new URLSearchParams(location.search);
+        const fileUrl = params.get('file');
+        const viewer = document.getElementById('viewer');
+
+        if (fileUrl) {
+            // Validate URL: only allow same-origin or relative paths
+            const sanitizedUrl = new URL(fileUrl, location.origin).href;
+
+            // Use embed as simpler approach (works on most mobile browsers)
+            const embed = document.createElement('embed');
+            embed.src = sanitizedUrl;
+            embed.type = 'application/pdf';
+            viewer.appendChild(embed);
+
+            // Fallback link (safe DOM construction, no innerHTML)
+            const fallback = document.createElement('div');
+            fallback.className = 'fallback';
+            const p = document.createElement('p');
+            p.appendChild(document.createTextNode("If the PDF doesn't display, "));
+            const a = document.createElement('a');
+            a.href = sanitizedUrl;
+            a.target = '_blank';
+            a.textContent = 'click here to download';
+            p.appendChild(a);
+            p.appendChild(document.createTextNode('.'));
+            fallback.appendChild(p);
+            viewer.appendChild(fallback);
+
+            try { document.title = decodeURIComponent(sanitizedUrl.split('/').pop()); } catch(e) {}
+        } else {
+            viewer.innerHTML = '<div class="fallback">No file specified</div>';
+        }
+    </script>
+</body>
+</html>

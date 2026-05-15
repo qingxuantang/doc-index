@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YAML Viewer</title>
+<script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans SC", "Segoe UI", sans-serif;
+    background: #fafafa;
+    color: #222;
+    padding: 0;
+    line-height: 1.5;
+    font-size: 14px;
+  }
+  header {
+    position: sticky; top: 0; z-index: 10;
+    background: #fff;
+    border-bottom: 1px solid #e5e5e5;
+    padding: 12px 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  h1 { font-size: 16px; margin-bottom: 8px; color: #333; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  input[type="search"] {
+    flex: 1; min-width: 200px;
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+  select, button {
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 13px;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f0f0f0; }
+  .stats {
+    font-size: 12px;
+    color: #666;
+    margin-top: 4px;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 16px; }
+  .entry {
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    transition: box-shadow 0.15s;
+  }
+  .entry:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .entry-head {
+    padding: 10px 14px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .entry-head:hover { background: #f9f9f9; }
+  .entry-title {
+    font-weight: 600;
+    color: #2d5f8a;
+    word-break: break-all;
+  }
+  .entry-meta { font-size: 12px; color: #666; }
+  .badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 500;
+    margin-left: 4px;
+  }
+  .badge-occ { background: #e3f2fd; color: #1565c0; }
+  .badge-pending { background: #fff3e0; color: #e65100; }
+  .badge-approved { background: #e8f5e9; color: #2e7d32; }
+  .badge-rejected { background: #ffebee; color: #c62828; }
+  .badge-merged { background: #f3e5f5; color: #6a1b9a; }
+  .entry-body {
+    display: none;
+    padding: 0 14px 14px;
+    border-top: 1px solid #f0f0f0;
+  }
+  .entry.open .entry-body { display: block; }
+  .field-row {
+    margin-top: 10px;
+    font-size: 13px;
+  }
+  .field-label {
+    font-weight: 600;
+    color: #555;
+    font-size: 12px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .source {
+    background: #f8f9fa;
+    border-left: 3px solid #2d5f8a;
+    padding: 6px 10px;
+    margin-top: 4px;
+    border-radius: 0 4px 4px 0;
+    font-size: 12px;
+  }
+  .source-file {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    color: #666;
+    word-break: break-all;
+  }
+  .source-excerpt {
+    color: #333;
+    margin-top: 3px;
+    word-break: break-word;
+  }
+  .observed-value {
+    background: #f5f5f5;
+    padding: 6px 10px;
+    margin-top: 4px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+  .observed-value-line {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-weight: 600;
+    color: #2e7d32;
+  }
+  .pagination {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    align-items: center;
+    margin: 20px 0;
+    flex-wrap: wrap;
+  }
+  .pagination button {
+    padding: 6px 10px;
+  }
+  .pagination span { font-size: 13px; color: #666; padding: 0 8px; }
+  #loading { text-align: center; color: #999; padding: 40px; }
+  #error { color: #e74c3c; padding: 20px; background: #fff; border-radius: 8px; }
+  pre { white-space: pre-wrap; word-wrap: break-word; }
+  .raw-link {
+    font-size: 12px;
+    color: #2d5f8a;
+    text-decoration: none;
+    margin-left: 8px;
+  }
+  .raw-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1 id="title">YAML Viewer</h1>
+  <div class="controls">
+    <input type="search" id="search" placeholder="搜 canonical / term / excerpt / source file ...">
+    <select id="status-filter">
+      <option value="">全部 status</option>
+      <option value="pending_review">pending_review</option>
+      <option value="approved">approved</option>
+      <option value="rejected">rejected</option>
+      <option value="merged">merged</option>
+    </select>
+    <select id="page-size">
+      <option value="50" selected>50/页</option>
+      <option value="100">100/页</option>
+      <option value="200">200/页</option>
+    </select>
+    <button id="expand-all">展开全部</button>
+    <button id="collapse-all">收起全部</button>
+    <a class="raw-link" id="raw-link" target="_blank">查看 raw YAML →</a>
+  </div>
+  <div class="stats" id="stats"></div>
+</header>
+
+<main>
+  <div id="loading">⏳ 加载中（大文件可能要几秒）...</div>
+  <div id="error" style="display:none"></div>
+  <div id="entries"></div>
+  <div class="pagination" id="pagination" style="display:none">
+    <button id="prev">‹ 上一页</button>
+    <span id="page-info"></span>
+    <button id="next">下一页 ›</button>
+  </div>
+</main>
+
+<script>
+(function() {
+  const params = new URLSearchParams(location.search);
+  const fileUrl = params.get('file');
+  if (!fileUrl) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error').textContent = '错误：URL 缺少 ?file= 参数';
+    document.getElementById('error').style.display = 'block';
+    return;
+  }
+  document.getElementById('raw-link').href = fileUrl;
+  document.getElementById('title').textContent = fileUrl.split('/').pop();
+
+  let allEntries = [];
+  let filteredEntries = [];
+  let pageSize = 50;
+  let currentPage = 0;
+
+  fetch(fileUrl)
+    .then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    })
+    .then(text => {
+      // YAML may have header comments before list — js-yaml handles them
+      const data = jsyaml.load(text);
+      if (!Array.isArray(data)) {
+        throw new Error('期待 YAML 是顶层数组，实际是 ' + typeof data);
+      }
+      allEntries = data;
+      filteredEntries = data.slice();
+      document.getElementById('loading').style.display = 'none';
+      bindControls();
+      render();
+    })
+    .catch(err => {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('error').textContent = '加载失败：' + err.message;
+      document.getElementById('error').style.display = 'block';
+    });
+
+  function escapeHtml(s) {
+    if (s === undefined || s === null) return '';
+    return String(s).replace(/[&<>"']/g, c => (
+      {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+    ));
+  }
+
+  function entryTitle(e) {
+    return e.canonical || e.term || e.id || e.name || '(no key)';
+  }
+  function entryStatus(e) {
+    const s = e.status || '';
+    if (s.startsWith('merged')) return 'merged';
+    return s;
+  }
+
+  function bindControls() {
+    document.getElementById('search').addEventListener('input', applyFilter);
+    document.getElementById('status-filter').addEventListener('change', applyFilter);
+    document.getElementById('page-size').addEventListener('change', e => {
+      pageSize = parseInt(e.target.value, 10);
+      currentPage = 0;
+      render();
+    });
+    document.getElementById('expand-all').addEventListener('click', () => {
+      document.querySelectorAll('.entry').forEach(el => el.classList.add('open'));
+    });
+    document.getElementById('collapse-all').addEventListener('click', () => {
+      document.querySelectorAll('.entry').forEach(el => el.classList.remove('open'));
+    });
+    document.getElementById('prev').addEventListener('click', () => {
+      if (currentPage > 0) { currentPage--; render(); }
+    });
+    document.getElementById('next').addEventListener('click', () => {
+      if ((currentPage + 1) * pageSize < filteredEntries.length) {
+        currentPage++; render();
+      }
+    });
+  }
+
+  function applyFilter() {
+    const q = document.getElementById('search').value.toLowerCase();
+    const status = document.getElementById('status-filter').value;
+    filteredEntries = allEntries.filter(e => {
+      if (status) {
+        const s = entryStatus(e);
+        if (status === 'merged' && !s.startsWith('merged')) return false;
+        if (status !== 'merged' && s !== status) return false;
+      }
+      if (!q) return true;
+      const hay = JSON.stringify(e).toLowerCase();
+      return hay.includes(q);
+    });
+    currentPage = 0;
+    render();
+  }
+
+  function render() {
+    const total = filteredEntries.length;
+    const allTotal = allEntries.length;
+    const start = currentPage * pageSize;
+    const end = Math.min(start + pageSize, total);
+    document.getElementById('stats').textContent =
+      '共 ' + allTotal + ' 条；当前过滤后 ' + total + ' 条；显示 ' + (total === 0 ? 0 : start + 1) + '–' + end;
+
+    const container = document.getElementById('entries');
+    container.innerHTML = '';
+
+    if (total === 0) {
+      container.innerHTML = '<div style="text-align:center;color:#999;padding:40px;">无匹配结果</div>';
+      document.getElementById('pagination').style.display = 'none';
+      return;
+    }
+
+    for (let i = start; i < end; i++) {
+      container.appendChild(buildEntry(filteredEntries[i]));
+    }
+
+    document.getElementById('pagination').style.display = 'flex';
+    document.getElementById('page-info').textContent =
+      '第 ' + (currentPage + 1) + ' / ' + Math.ceil(total / pageSize) + ' 页';
+    document.getElementById('prev').disabled = currentPage === 0;
+    document.getElementById('next').disabled = end >= total;
+  }
+
+  function buildEntry(e) {
+    const wrap = document.createElement('div');
+    wrap.className = 'entry';
+
+    const head = document.createElement('div');
+    head.className = 'entry-head';
+    head.addEventListener('click', () => wrap.classList.toggle('open'));
+
+    const titleSpan = document.createElement('div');
+    const status = entryStatus(e);
+    const statusClass = 'badge badge-' + (status || 'pending');
+    let titleHtml = '<span class="entry-title">' + escapeHtml(entryTitle(e)) + '</span>';
+    if (e.framework) titleHtml += ' <span class="entry-meta">· ' + escapeHtml(e.framework) + '</span>';
+    if (e.occurrences !== undefined) titleHtml += ' <span class="badge badge-occ">' + e.occurrences + '×</span>';
+    if (e.observed_values) {
+      const total = e.observed_values.reduce((s, v) => s + (v.occurrences || 0), 0);
+      titleHtml += ' <span class="badge badge-occ">' + total + '× total</span>';
+    }
+    if (e.suggested_default !== undefined) titleHtml += ' <span class="entry-meta">→ default=<code>' + escapeHtml(e.suggested_default) + '</code></span>';
+    if (status) titleHtml += ' <span class="' + statusClass + '">' + escapeHtml(status) + '</span>';
+    titleSpan.innerHTML = titleHtml;
+    head.appendChild(titleSpan);
+
+    const arrow = document.createElement('span');
+    arrow.textContent = '▼';
+    arrow.style.color = '#999';
+    arrow.style.fontSize = '12px';
+    head.appendChild(arrow);
+
+    wrap.appendChild(head);
+
+    const body = document.createElement('div');
+    body.className = 'entry-body';
+
+    if (e.type) body.appendChild(field('type', e.type));
+    if (e.framework) body.appendChild(field('framework', e.framework));
+    if (e.occurrences !== undefined) body.appendChild(field('occurrences', e.occurrences));
+    if (e.suggested_default !== undefined) body.appendChild(field('suggested_default', e.suggested_default));
+    if (e.status) body.appendChild(field('status', e.status));
+
+    if (e.sources && Array.isArray(e.sources)) {
+      const row = document.createElement('div');
+      row.className = 'field-row';
+      const lab = document.createElement('div');
+      lab.className = 'field-label';
+      lab.textContent = 'sources (' + e.sources.length + ')';
+      row.appendChild(lab);
+      e.sources.forEach(s => row.appendChild(buildSource(s)));
+      body.appendChild(row);
+    }
+
+    if (e.observed_values && Array.isArray(e.observed_values)) {
+      const row = document.createElement('div');
+      row.className = 'field-row';
+      const lab = document.createElement('div');
+      lab.className = 'field-label';
+      lab.textContent = 'observed values (' + e.observed_values.length + ' distinct)';
+      row.appendChild(lab);
+      e.observed_values.forEach(v => row.appendChild(buildObservedValue(v)));
+      body.appendChild(row);
+    }
+
+    wrap.appendChild(body);
+    return wrap;
+  }
+
+  function field(label, value) {
+    const row = document.createElement('div');
+    row.className = 'field-row';
+    row.innerHTML = '<div class="field-label">' + escapeHtml(label) + '</div><div>' + escapeHtml(value) + '</div>';
+    return row;
+  }
+
+  function buildSource(s) {
+    const div = document.createElement('div');
+    div.className = 'source';
+    div.innerHTML =
+      '<div class="source-file">' + escapeHtml(s.file || '') + (s.line ? ':' + s.line : '') + '</div>' +
+      '<div class="source-excerpt">' + escapeHtml(s.excerpt || '') + '</div>';
+    return div;
+  }
+
+  function buildObservedValue(v) {
+    const div = document.createElement('div');
+    div.className = 'observed-value';
+    let html = '<div class="observed-value-line">value=<code>' + escapeHtml(v.value) + '</code> (' + (v.occurrences || 0) + '×)</div>';
+    if (v.sources && Array.isArray(v.sources)) {
+      v.sources.forEach(s => {
+        html += '<div class="source" style="margin-top:4px;">' +
+          '<div class="source-file">' + escapeHtml(s.file || '') + (s.line ? ':' + s.line : '') + '</div>' +
+          '<div class="source-excerpt">' + escapeHtml(s.excerpt || '') + '</div>' +
+          '</div>';
+      });
+    }
+    div.innerHTML = html;
+    return div;
+  }
+})();
+</script>
+
+</body>
+</html>

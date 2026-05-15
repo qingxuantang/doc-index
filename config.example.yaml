@@ -1,0 +1,104 @@
+# Doc Index Configuration
+# Copy this file to <your-project>/doc-index.yaml and customize.
+
+project:
+  name: "Your Project"                  # Full project name (shown in header)
+  short_name: "YP"                      # PWA short name (home screen)
+  description: "Project documentation index"  # PWA description
+  lang: "en"                            # Page language: "en" or "zh-CN"
+  color: "#2d5f8a"                      # Theme color (header, buttons, PWA)
+  subtitle: "Document Index"            # Header subtitle
+
+repo:
+  path: ~/projects/your-project         # Absolute or ~ path to project repo
+  file_types:                           # Whitelist: only document-style files are indexed.
+    # Doc-index intentionally excludes source code — its job is to help you
+    # understand a project's *plans / specs / diagrams / notes*, not read code.
+    # Anything not in this list (.py, .js, .ts, .go, .rs, ...) is skipped.
+    - pdf
+    - md
+    - txt
+    - html
+    - ipynb       # Jupyter notebooks (rendered as static HTML on click)
+    - yaml        # Configs surfaced via the YAML viewer
+    - yml
+    - xlsx        # Spreadsheets / data tables
+    - xls
+    - csv
+    - docx        # Word docs
+    - doc
+    - pptx        # Slide decks
+    - ppt
+    - png         # Diagrams / screenshots
+    - jpg
+    - jpeg
+    - gif
+    - webp
+    - svg         # Vector diagrams
+  ignore:                               # Folders/patterns to skip
+    - .git
+    - node_modules
+    - __pycache__
+    - .DS_Store
+    - "*.pyc"
+    - .env
+    - .venv
+
+serve:
+  root: /usr/share/nginx/html/your-project-docs  # Output directory for generated site
+  url_base: /your-project-docs/                  # URL path prefix (for nginx location)
+  domain: ""                                     # REQUIRED for full server block — e.g. "docs.example.com"
+  auth:                                          # Basic auth — ON by default
+    enabled: true
+    user: "admin"                                # Login user
+    auto_password: true                          # Generate random password at init
+    password: ""                                 # Filled in by init (or set manually)
+    htpasswd_path: ""                            # Filled in by init: <serve.root>/.htpasswd
+
+quick_links: []                         # Shortcut links at top of page
+  # - label: "Project Homepage"
+  #   url: "https://example.com"
+  #   icon: "🌐"
+  # - label: "GitHub Repo"
+  #   url: "https://github.com/owner/repo"
+  #   icon: "📦"
+
+sections:
+  auto: true                            # Auto-generate sections from folder structure
+  color_cycle:                          # Colors rotate per top-level folder
+    - "#2d5f8a"                         # Blue
+    - "#27ae60"                         # Green
+    - "#e67e22"                         # Orange
+    - "#8e44ad"                         # Purple
+    - "#e74c3c"                         # Red
+    - "#16a085"                         # Teal
+    - "#95a5a6"                         # Gray
+  # Optional: override specific folders
+  # overrides:
+  #   "docs/api":
+  #     title: "API Documentation"
+  #     color: "#e74c3c"
+  #   "archive":
+  #     collapsed: true
+  root_files_section: "Project Root"    # Section name for files in repo root
+
+tags:
+  auto: true                            # Auto-tag based on git timestamps
+  new_days: 7                           # Files added within N days get "New" tag
+  updated_days: 3                       # Files modified within N days get "Updated" tag
+  labels:                               # Tag labels (localize as needed)
+    new: "New"
+    updated: "Updated"
+    latest: "Latest"
+
+triggers:
+  cron: ""                              # Cron expression, empty = disabled. e.g. "0 */6 * * *"
+  manual: true                          # Always true — can always run scan.py manually
+
+external_sources: []                    # External API adapters (see adapters/)
+  # - name: "GitHub Releases"
+  #   adapter: "github_releases"
+  #   config:
+  #     repo: "owner/repo"
+  #     token_env: "GITHUB_TOKEN"
+  #     download_to: "releases/"

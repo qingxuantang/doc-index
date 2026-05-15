@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Markdown Viewer</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Noto Sans SC', sans-serif;
+            background: #fff;
+            color: #333;
+            padding: 16px;
+            max-width: 800px;
+            margin: 0 auto;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .loading { text-align: center; color: #999; padding: 40px; }
+        .error { color: #e74c3c; padding: 20px; }
+        h1 { font-size: 22px; margin: 20px 0 10px; }
+        h2 { font-size: 18px; margin: 18px 0 8px; border-bottom: 1px solid #eee; padding-bottom: 4px; }
+        h3 { font-size: 16px; margin: 14px 0 6px; }
+        p { margin: 8px 0; }
+        ul, ol { padding-left: 24px; margin: 8px 0; }
+        code { background: #f5f5f5; padding: 2px 6px; border-radius: 3px; font-size: 13px; }
+        pre { background: #f5f5f5; padding: 12px; border-radius: 6px; overflow-x: auto; margin: 10px 0; }
+        pre code { background: none; padding: 0; }
+        table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13px; }
+        th, td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; }
+        th { background: #f5f5f5; font-weight: 600; }
+        blockquote { border-left: 3px solid #ddd; padding-left: 12px; color: #666; margin: 10px 0; }
+        a { color: #2d5f8a; }
+        strong { font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div id="content"><div class="loading">Loading...</div></div>
+    <script>
+        const params = new URLSearchParams(location.search);
+        const fileUrl = params.get('file');
+        if (fileUrl) {
+            // Validate URL: only allow same-origin
+            let sanitizedUrl;
+            try {
+                sanitizedUrl = new URL(fileUrl, location.origin).href;
+                if (new URL(sanitizedUrl).origin !== location.origin) {
+                    throw new Error('Cross-origin URL blocked');
+                }
+            } catch(e) {
+                document.getElementById('content').textContent = 'Invalid URL: ' + e.message;
+                throw e;
+            }
+            fetch(sanitizedUrl)
+                .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
+                .then(md => {
+                    // Render markdown with HTML sanitization
+                    document.getElementById('content').innerHTML = marked.parse(md, {
+                        breaks: true,
+                        gfm: true,
+                        sanitizer: function(tag) { return ''; }
+                    });
+                    // Set title from first H1
+                    const h1 = document.querySelector('h1');
+                    if (h1) document.title = h1.textContent;
+                })
+                .catch(e => {
+                    // Safe error display using textContent
+                    const errDiv = document.createElement('div');
+                    errDiv.className = 'error';
+                    errDiv.textContent = 'Failed to load: ' + sanitizedUrl + ' (' + e.message + ')';
+                    const content = document.getElementById('content');
+                    content.innerHTML = '';
+                    content.appendChild(errDiv);
+                });
+        } else {
+            document.getElementById('content').textContent = 'No file specified';
+        }
+    </script>
+</body>
+</html>
