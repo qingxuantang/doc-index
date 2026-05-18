@@ -205,6 +205,7 @@ def scan_repo(cfg):
     git_dates = git_file_dates(repo_path)
 
     sections = OrderedDict()
+    promoted_sections = OrderedDict()  # rendered FIRST, in declaration order
     root_files = []
     color_idx = 0
 
@@ -257,7 +258,44 @@ def scan_repo(cfg):
                 if override_key in overrides and overrides[override_key].get("collapsed"):
                     section["collapsed"] = True
 
-                sections[entry.name] = section
+                # Promote selected subsections to top-level sections.
+                # Promoted sections are rendered FIRST, in the order they appear
+                # in `sections.promote`. Useful for status folders (NOW / NEXT
+                # / etc.) that should be the most visible thing on the page.
+                promote_list = list(section_cfg.get("promote", []))
+                promote_set = set(promote_list)
+                if promote_set:
+                    # Build a per-promoted-path order index for stable sorting
+                    order_index = {p: i for i, p in enumerate(promote_list)}
+                    keys_to_promote = [
+                        sub_key for sub_key in list(section["subsections"].keys())
+                        if f"{override_key}/{sub_key}" in promote_set
+                    ]
+                    # Sort by declared order in `sections.promote`
+                    keys_to_promote.sort(
+                        key=lambda k: order_index.get(f"{override_key}/{k}", 999)
+                    )
+                    for sub_key in keys_to_promote:
+                        sub = section["subsections"].pop(sub_key)
+                        sub_override_key = f"{override_key}/{sub_key}"
+                        if sub_override_key in overrides:
+                            ov = overrides[sub_override_key]
+                            if "color" in ov:
+                                sub["color"] = ov["color"]
+                            else:
+                                sub["color"] = colors[color_idx % len(colors)]
+                                color_idx += 1
+                            if "title" in ov:
+                                sub["title"] = ov["title"]
+                            if ov.get("collapsed"):
+                                sub["collapsed"] = True
+                        else:
+                            sub["color"] = colors[color_idx % len(colors)]
+                            color_idx += 1
+                        promoted_sections[f"{entry.name}__{sub_key}"] = sub
+
+                if section["files"] or section["subsections"]:
+                    sections[entry.name] = section
 
     # Add root files as a section if any
     if root_files:
@@ -269,7 +307,13 @@ def scan_repo(cfg):
             "collapsed": False,
         }
 
-    return sections
+    # Promoted sections are rendered first
+    final = OrderedDict()
+    for k, v in promoted_sections.items():
+        final[k] = v
+    for k, v in sections.items():
+        final[k] = v
+    return final
 
 
 def scan_folder(folder, repo_root, file_types, ignore_patterns, git_dates, tag_cfg, overrides):
