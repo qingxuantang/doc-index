@@ -143,6 +143,61 @@ If `triggers.cron` is set, `serve.py init` adds it to crontab. Logs go to `<serv
 python3 /path/to/doc-index/scripts/scan.py /path/to/project/doc-index.yaml
 ```
 
+## Status-board layout (`sections.promote`)
+
+By default doc-index groups files by direct child folders of the repo root. If you want a "at-a-glance current state" view — what's actively in flight vs what's next vs what's archived — you can organize your docs into status subfolders and use `sections.promote` to lift them to top-level sections.
+
+Convention: prefix status folder names with a 2-digit sort code so they sort naturally.
+
+```
+docs/
+├── 00-now/         current sprint (usually 1-3 files)
+├── 10-next/        designed, awaiting sprint
+├── 20-design/      architecture / long-term reference
+├── 30-guide/       API / deployment / how-to
+├── 40-business/    pitch / mockups / one-off context
+└── 90-archive/     completed / superseded
+```
+
+Then in `doc-index.yaml`:
+
+```yaml
+sections:
+  auto: true
+  promote:
+    - "docs/00-now"
+    - "docs/10-next"
+    - "docs/20-design"
+    - "docs/30-guide"
+    - "docs/40-business"
+    - "docs/90-archive"
+  overrides:
+    "docs/00-now":
+      title: "🟢 NOW — currently in flight"
+      color: "#27ae60"
+    "docs/10-next":
+      title: "🟡 NEXT — designed, awaiting sprint"
+      color: "#e67e22"
+    "docs/20-design":
+      title: "📐 DESIGN — architecture + reference"
+      color: "#2d5f8a"
+      collapsed: true
+    "docs/30-guide":
+      title: "📖 GUIDE — API / how-to"
+      color: "#8e44ad"
+      collapsed: true
+    "docs/40-business":
+      title: "💼 BUSINESS"
+      color: "#95a5a6"
+      collapsed: true
+    "docs/90-archive":
+      title: "📦 ARCHIVE"
+      color: "#7f8c8d"
+      collapsed: true
+```
+
+Promoted sections render **before** all other sections, in the order listed in `promote`. Backward compatible — without `promote` the layout is unchanged.
+
 ## What gets indexed (doc-only)
 
 Doc-index is **deliberately a documentation browser, not a code browser**. Its job: help someone glance at a project and understand the plan / spec / diagrams / notes — without ever opening source code.

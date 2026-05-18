@@ -129,6 +129,61 @@ python3 /path/to/doc-index/scripts/scan.py /path/to/project/doc-index.yaml
 
 或者用 `triggers.cron` 在 config 里配 5 字段 cron 表达式，`serve.py init` 会自动写 crontab。
 
+## 状态板布局（`sections.promote`）
+
+doc-index 默认按 repo 根目录的一级子文件夹分 section。如果你想要一个**"当前状态一目了然"**的视图——能马上看到 "正在干什么 / 下一步什么 / 已经归档了什么"——可以把文档按状态分子文件夹，然后用 `sections.promote` 把这些子文件夹升格成顶级 section。
+
+约定：状态文件夹用 2 位数字前缀，自然排序。
+
+```
+docs/
+├── 00-now/         当前正在执行的 sprint（通常 1-3 个文件）
+├── 10-next/        已设计 / 待开工
+├── 20-design/      架构 / 长期参考
+├── 30-guide/       API / 部署 / 操作手册
+├── 40-business/    pitch / mockup / 一次性业务
+└── 90-archive/     已完成 / 已废弃
+```
+
+然后在 `doc-index.yaml`：
+
+```yaml
+sections:
+  auto: true
+  promote:
+    - "docs/00-now"
+    - "docs/10-next"
+    - "docs/20-design"
+    - "docs/30-guide"
+    - "docs/40-business"
+    - "docs/90-archive"
+  overrides:
+    "docs/00-now":
+      title: "🟢 NOW — 当前在执行"
+      color: "#27ae60"
+    "docs/10-next":
+      title: "🟡 NEXT — 已设计待开工"
+      color: "#e67e22"
+    "docs/20-design":
+      title: "📐 DESIGN — 架构 + 长期参考"
+      color: "#2d5f8a"
+      collapsed: true
+    "docs/30-guide":
+      title: "📖 GUIDE — API / 操作手册"
+      color: "#8e44ad"
+      collapsed: true
+    "docs/40-business":
+      title: "💼 BUSINESS"
+      color: "#95a5a6"
+      collapsed: true
+    "docs/90-archive":
+      title: "📦 ARCHIVE"
+      color: "#7f8c8d"
+      collapsed: true
+```
+
+升格的 section 永远渲染在**最前面**，按 `promote` 列表声明的顺序。向后兼容——不配 `promote` 行为完全不变。
+
 ## Viewer 行为
 
 doc-index 把不同类型路由到合适的 viewer：

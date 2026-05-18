@@ -65,6 +65,25 @@ quick_links: []                         # Shortcut links at top of page
 
 sections:
   auto: true                            # Auto-generate sections from folder structure
+
+  # Optional: promote selected SUBfolders to top-level sections.
+  # By default doc-index groups by direct child folders of the repo root.
+  # If you organise status under one parent (e.g. docs/00-now, docs/10-next),
+  # `promote` lifts those subfolders out and renders them as top-level
+  # sections — IN THE ORDER they appear here. Promoted sections render BEFORE
+  # all other sections, so your most-active state is always at the top.
+  #
+  # Recommended convention: prefix folder names with a 2-digit sort code
+  # (00-now, 10-next, 20-design, 30-guide, 40-business, 90-archive) and
+  # pair `promote` with `overrides` for color + title + collapsed state.
+  # promote:
+  #   - "docs/00-now"
+  #   - "docs/10-next"
+  #   - "docs/20-design"
+  #   - "docs/30-guide"
+  #   - "docs/40-business"
+  #   - "docs/90-archive"
+
   color_cycle:                          # Colors rotate per top-level folder
     - "#2d5f8a"                         # Blue
     - "#27ae60"                         # Green
@@ -73,13 +92,24 @@ sections:
     - "#e74c3c"                         # Red
     - "#16a085"                         # Teal
     - "#95a5a6"                         # Gray
+
   # Optional: override specific folders
   # overrides:
-  #   "docs/api":
-  #     title: "API Documentation"
-  #     color: "#e74c3c"
-  #   "archive":
+  #   "docs/00-now":
+  #     title: "🟢 NOW — currently in flight"
+  #     color: "#27ae60"
+  #   "docs/10-next":
+  #     title: "🟡 NEXT — designed, awaiting sprint"
+  #     color: "#e67e22"
+  #   "docs/20-design":
+  #     title: "📐 DESIGN — architecture + long-term reference"
+  #     color: "#2d5f8a"
   #     collapsed: true
+  #   "docs/90-archive":
+  #     title: "📦 ARCHIVE — completed / superseded"
+  #     color: "#7f8c8d"
+  #     collapsed: true
+
   root_files_section: "Project Root"    # Section name for files in repo root
 
 tags:
