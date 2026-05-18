@@ -147,6 +147,8 @@ python3 /path/to/doc-index/scripts/scan.py /path/to/project/doc-index.yaml
 
 By default doc-index groups files by direct child folders of the repo root. If you want a "at-a-glance current state" view — what's actively in flight vs what's next vs what's archived — you can organize your docs into status subfolders and use `sections.promote` to lift them to top-level sections.
 
+📋 **Full guide with lifecycle / what-goes-where / migration tips: [RECOMMENDED_LAYOUT.md](./RECOMMENDED_LAYOUT.md)**
+
 Convention: prefix status folder names with a 2-digit sort code so they sort naturally.
 
 ```

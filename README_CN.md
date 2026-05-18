@@ -133,6 +133,8 @@ python3 /path/to/doc-index/scripts/scan.py /path/to/project/doc-index.yaml
 
 doc-index 默认按 repo 根目录的一级子文件夹分 section。如果你想要一个**"当前状态一目了然"**的视图——能马上看到 "正在干什么 / 下一步什么 / 已经归档了什么"——可以把文档按状态分子文件夹，然后用 `sections.promote` 把这些子文件夹升格成顶级 section。
 
+📋 **完整指南（含生命周期 / 什么放哪个文件夹 / 迁移技巧）：[RECOMMENDED_LAYOUT.md](./RECOMMENDED_LAYOUT.md)**
+
 约定：状态文件夹用 2 位数字前缀，自然排序。
 
 ```
