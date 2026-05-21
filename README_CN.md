@@ -194,7 +194,38 @@ doc-index 把不同类型路由到合适的 viewer：
 - MD → 内置 markdown viewer
 - YAML → 内置 YAML viewer（可浏览、可过滤）
 - IPYNB → 新标签页打开（浏览器直接渲染）
-- Office（xlsx / docx / pptx）→ Microsoft Office 网页 viewer
+- Office（doc / docx / xls / xlsx / ppt / pptx）→ 本地 `office-viewer.html`：
+  优先用预转 PDF 走 PDF.js 预览；缓存未命中时降级为浏览器内的 SheetJS /
+  mammoth.js 渲染。详见下方 **Office 预览**。
+
+### Office 预览（PDF 预转换）
+
+如果 doc-index 套了 basic auth，微软的 Office Online viewer
+（`view.officeapps.live.com`）就用不了——微软的服务器无法拿到带认证的文件。
+doc-index 改为在本地把 Office 文件预先转成 PDF，通过自带的 PDF.js viewer
+展示。`serve.root` 下的布局：
+
+```
+pdf-cache/
+  index.json            # repo 内相对路径 → {key, mtime, size, sha256}
+  <key>.pdf             # 转换后的 PDF，key = 源文件 sha256[:16]
+```
+
+每次 `scan.py` 跑完会自动调用 `scripts/convert-office.py`（共用同一份
+config）。脚本会：
+
+- 跟随 symlink 遍历 `repo.path`，挑出 Office 扩展名
+- 对 mtime+size+sha256 命中缓存的文件跳过
+- 用 **LibreOffice headless**（`libreoffice --headless --convert-to pdf`）
+  转换
+- 极少数 LibreOffice 打不开的 .pptx / .docx，自动用 `python-pptx` /
+  `python-docx` 重新保存后重试
+- 清理源文件已删除的孤儿 PDF
+
+客户端兜底依赖（`sheetjs.min.js`、`mammoth.min.js`）已自托管在 serve 根
+目录，**不走 CDN**、不需要 SRI、在 `script-src 'self'` 的严格 CSP 下也能
+工作。这套兜底只在缓存未命中时触发——一旦某个文件转过一次，后续都直接
+走 PDF。
 
 ## 适配器（外部数据源）
 
@@ -223,11 +254,25 @@ external_sources:
 
 ## 依赖
 
+**必需**
+
 - Python 3.8+
-- PyYAML (`pip install pyyaml`)
+- PyYAML（`pip install pyyaml`）
 - nginx（在运行，且对 serve 目录有读权限）
 - `htpasswd`（apache2-utils）或 `openssl`，认证生成需要其中之一
-- Pillow（可选，仅 `icon.py` 自动生成 PWA 图标时用到）
+
+**可选**
+
+- Pillow —— `icon.py` 自动生成 PWA 图标时用到
+- **LibreOffice**（writer + impress + calc）—— Office → PDF 预览
+  - Debian/Ubuntu: `apt install libreoffice-writer libreoffice-impress libreoffice-calc`
+  - RHEL/Fedora/OpenCloudOS: `dnf install libreoffice-writer libreoffice-impress libreoffice-calc`
+- **python-pptx / python-docx / openpyxl** —— 修复 LibreOffice 打不开的
+  pptx / docx（soft 兜底；只在 `convert-office.py` 输出有 "failed" 时才需要装）：
+  `pip install python-pptx python-docx openpyxl`
+
+不装 LibreOffice 时 PWA 不会挂，只是 Office 文件会降级：`.docx` / `.xlsx`
+走浏览器内 JS 渲染；`.doc` / `.xls` / `.ppt` / `.pptx` 降级成下载提示。
 
 ## 协议
 

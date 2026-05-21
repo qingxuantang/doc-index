@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Office Viewer</title>
+<style>
+  :root {
+    --bg: #f5f7fa;
+    --fg: #1f2937;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --accent: #2d5f8a;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    display: flex;
+    flex-direction: column;
+  }
+  .toolbar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 1rem;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .toolbar a, .toolbar button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.35rem 0.7rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--fg);
+    font-size: 0.85rem;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .toolbar a:hover, .toolbar button:hover { background: var(--bg); }
+  .toolbar .filename {
+    flex: 1 1 auto;
+    color: var(--muted);
+    font-size: 0.85rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .toolbar .badge {
+    font-size: 0.7rem;
+    padding: 0.15rem 0.45rem;
+    background: var(--bg);
+    color: var(--muted);
+    border-radius: 999px;
+  }
+  main {
+    flex: 1 1 auto;
+    overflow: auto;
+    padding: 1rem;
+  }
+  .status {
+    max-width: 32rem;
+    margin: 4rem auto;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.95rem;
+  }
+  .status h1 {
+    font-size: 1.15rem;
+    color: var(--fg);
+    margin: 0 0 0.5rem;
+  }
+  .status .spinner {
+    width: 32px;
+    height: 32px;
+    margin: 0.75rem auto;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #fallback {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    max-width: 64rem;
+    margin: 0 auto;
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
+  #fallback table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.5rem 0;
+  }
+  #fallback table, #fallback td, #fallback th {
+    border: 1px solid var(--border);
+  }
+  #fallback td, #fallback th { padding: 0.4rem 0.6rem; }
+  #fallback h1, #fallback h2, #fallback h3 { margin-top: 1.4rem; }
+  iframe.pdf { width: 100%; height: calc(100vh - 56px); border: 0; }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <a href="javascript:history.back()" title="Back">← Back</a>
+  <a id="dl" href="#" download title="Download original">⬇ Download</a>
+  <span class="filename" id="filename"></span>
+  <span class="badge" id="mode">…</span>
+</div>
+
+<main id="content">
+  <div class="status" id="status">
+    <h1>Loading…</h1>
+    <div class="spinner"></div>
+    <p>Looking up cached PDF preview.</p>
+  </div>
+</main>
+
+<script>
+(function () {
+  const params = new URLSearchParams(location.search);
+  const fileUrl = params.get("file");
+  const fnameEl = document.getElementById("filename");
+  const modeEl = document.getElementById("mode");
+  const statusEl = document.getElementById("status");
+  const contentEl = document.getElementById("content");
+  const dlEl = document.getElementById("dl");
+
+  if (!fileUrl) {
+    statusEl.innerHTML = "<h1>No file specified</h1><p>Pass ?file=&lt;url&gt; in the query string.</p>";
+    return;
+  }
+
+  // Resolve absolute URL so we can derive both the filename and the
+  // repo-relative path used as the pdf-cache index key.
+  let abs;
+  try {
+    abs = new URL(fileUrl, location.href);
+  } catch (e) {
+    statusEl.innerHTML = "<h1>Invalid file URL</h1>";
+    return;
+  }
+
+  const filename = decodeURIComponent(abs.pathname.split("/").pop() || "(unknown)");
+  fnameEl.textContent = filename;
+  dlEl.href = abs.href;
+
+  const ext = (filename.split(".").pop() || "").toLowerCase();
+
+  // PWA layout: this page lives at the serve root. pdf-cache/ is a sibling.
+  // The cache index keys files by repo-relative path. Reconstruct that key
+  // from the file URL: strip the serve url_base prefix.
+  function deriveCacheKey() {
+    // The page's own directory (without trailing slash) is the serve root.
+    const pageBase = location.pathname.replace(/[^/]*$/, "");
+    // Skip the docs/ subprefix that scan.py adds — keys in pdf-cache/index.json
+    // are repo-relative (no docs/ prefix). The cache index file uses
+    // forward-slash repo paths.
+    const url = abs.href;
+    const here = new URL(pageBase, location.href).href;
+    if (!url.startsWith(here)) return null;
+    let rel = url.slice(here.length);
+    // index.json keys come from Path.relative_to(repo_root). scan.py serves
+    // files under <url_base>docs/<rel>, so strip the leading "docs/".
+    if (rel.startsWith("docs/")) rel = rel.slice("docs/".length);
+    try { rel = decodeURIComponent(rel); } catch (e) {}
+    return rel;
+  }
+
+  const cacheKey = deriveCacheKey();
+
+  function tryPdfCache() {
+    return fetch("./pdf-cache/index.json", { credentials: "same-origin" })
+      .then((r) => {
+        if (!r.ok) return null;
+        return r.json();
+      })
+      .then((idx) => {
+        if (!idx || !cacheKey) return null;
+        const entry = idx[cacheKey];
+        if (entry && entry.key) {
+          return "./pdf-cache/" + entry.key + ".pdf";
+        }
+        return null;
+      })
+      .catch(() => null);
+  }
+
+  function loadPdf(pdfUrl) {
+    modeEl.textContent = "PDF";
+    contentEl.innerHTML = "";
+    const iframe = document.createElement("iframe");
+    iframe.className = "pdf";
+    // Use the bundled PDF.js viewer (viewer.html sibling).
+    iframe.src = "./viewer.html?file=" + encodeURIComponent(pdfUrl);
+    contentEl.appendChild(iframe);
+  }
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error("failed to load " + src));
+      document.head.appendChild(s);
+    });
+  }
+
+  function showFallbackContainer() {
+    contentEl.innerHTML = "";
+    const wrap = document.createElement("div");
+    wrap.id = "fallback";
+    contentEl.appendChild(wrap);
+    return wrap;
+  }
+
+  function renderXlsxFallback() {
+    modeEl.textContent = "Client";
+    return loadScript("./sheetjs.min.js")
+      .then(() => fetch(abs.href, { credentials: "same-origin" }))
+      .then((r) => {
+        if (!r.ok) throw new Error("fetch " + r.status);
+        return r.arrayBuffer();
+      })
+      .then((buf) => {
+        const wb = XLSX.read(new Uint8Array(buf), { type: "array" });
+        const wrap = showFallbackContainer();
+        wb.SheetNames.forEach((name) => {
+          const h = document.createElement("h2");
+          h.textContent = name;
+          wrap.appendChild(h);
+          const sheet = wb.Sheets[name];
+          const html = XLSX.utils.sheet_to_html(sheet, { editable: false });
+          const div = document.createElement("div");
+          div.innerHTML = html;
+          wrap.appendChild(div);
+        });
+      });
+  }
+
+  function renderDocxFallback() {
+    modeEl.textContent = "Client";
+    return loadScript("./mammoth.min.js")
+      .then(() => fetch(abs.href, { credentials: "same-origin" }))
+      .then((r) => {
+        if (!r.ok) throw new Error("fetch " + r.status);
+        return r.arrayBuffer();
+      })
+      .then((buf) => mammoth.convertToHtml({ arrayBuffer: buf }))
+      .then((result) => {
+        const wrap = showFallbackContainer();
+        wrap.innerHTML = result.value;
+      });
+  }
+
+  function showUnsupported() {
+    modeEl.textContent = "—";
+    statusEl.innerHTML =
+      "<h1>Preview not available</h1>" +
+      "<p>This file type can't be previewed in the browser. " +
+      "Use the <strong>Download</strong> button above to open it locally.</p>";
+  }
+
+  function showError(err) {
+    modeEl.textContent = "Error";
+    statusEl.innerHTML =
+      "<h1>Couldn't preview this file</h1>" +
+      "<p style='color:#b91c1c'>" + (err && err.message ? err.message : err) + "</p>" +
+      "<p>Try the <strong>Download</strong> button.</p>";
+  }
+
+  tryPdfCache().then((pdfUrl) => {
+    if (pdfUrl) {
+      loadPdf(pdfUrl);
+      return;
+    }
+    // Cache miss — fall back to in-browser rendering for the formats we can
+    // handle. .doc / .xls / .ppt / .pptx have no good JS-only fallback.
+    if (ext === "xlsx") {
+      renderXlsxFallback().catch(showError);
+    } else if (ext === "docx") {
+      renderDocxFallback().catch(showError);
+    } else {
+      showUnsupported();
+    }
+  });
+})();
+</script>
+
+</body>
+</html>

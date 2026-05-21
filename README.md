@@ -219,7 +219,38 @@ The viewers handle each type appropriately:
 - MD → built-in markdown viewer
 - YAML → built-in YAML viewer (browsable, filterable)
 - IPYNB → opened in new tab (browser renders)
-- Office (xlsx/docx/pptx) → routed through Microsoft Office web viewer
+- Office (doc/docx/xls/xlsx/ppt/pptx) → local `office-viewer.html` shows a
+  PDF.js preview of a pre-converted PDF; falls back to in-browser SheetJS /
+  mammoth.js rendering when the PDF cache misses. See **Office preview**
+  below.
+
+### Office preview (PDF pre-conversion)
+
+Microsoft's Office Online viewer (`view.officeapps.live.com`) is unusable
+when your doc index is behind basic auth — Microsoft's servers can't fetch
+the file. Doc-index instead converts Office files to PDF locally and serves
+them through the bundled PDF.js viewer. Layout under `serve.root`:
+
+```
+pdf-cache/
+  index.json            # repo-relative-path → {key, mtime, size, sha256}
+  <key>.pdf             # converted PDF (key = sha256[:16] of source)
+```
+
+Conversion runs automatically after each `scan.py` (it shells out to
+`scripts/convert-office.py` with the same config). The script:
+
+- walks `repo.path`, following symlinks, picking up Office extensions
+- skips files whose mtime+size+sha256 already match the cache
+- uses **LibreOffice headless** (`libreoffice --headless --convert-to pdf`)
+- for occasional .pptx / .docx files LibreOffice refuses to open, re-saves
+  them via `python-pptx` / `python-docx` and retries
+- cleans up orphan PDFs whose source no longer exists
+
+The client-side fallback (`sheetjs.min.js`, `mammoth.min.js`) is bundled in
+the served root — no CDN dependency, no SRI concern, works under strict
+`script-src 'self'` CSP. The fallback only fires on cache miss; once a file
+has been converted once, all subsequent views serve the PDF.
 
 ## Config Reference
 
@@ -264,8 +295,23 @@ Reference implementation: `adapters/github_releases.py`.
 
 ## Dependencies
 
+**Required**
+
 - Python 3.8+
 - PyYAML (`pip install pyyaml`)
 - nginx (running, with permission to read serve root)
 - Either `htpasswd` (apache2-utils) OR `openssl` — needed for auth setup
-- Pillow (optional, for `icon.py` PWA icon generation)
+
+**Optional**
+
+- Pillow — `icon.py` PWA icon generation
+- **LibreOffice** (writer + impress + calc) — Office → PDF preview
+  - Debian/Ubuntu: `apt install libreoffice-writer libreoffice-impress libreoffice-calc`
+  - RHEL/Fedora/OpenCloudOS: `dnf install libreoffice-writer libreoffice-impress libreoffice-calc`
+- **python-pptx / python-docx / openpyxl** — repair files LibreOffice can't
+  open directly (soft fallback; install only if you see "failed" rows in
+  `convert-office.py` output): `pip install python-pptx python-docx openpyxl`
+
+Without LibreOffice, Office files degrade to client-side rendering for
+`.docx` / `.xlsx` and a download prompt for `.doc` / `.xls` / `.ppt` /
+`.pptx`. The PWA still works, you just get less fidelity on legacy formats.

@@ -615,8 +615,16 @@ def main():
         shutil.copy2(sw_src, sw_dst)
         print(f"Copied: {sw_dst}")
 
-    # Copy viewers
-    for viewer in ["viewer.html", "md-viewer.html", "yaml-viewer.html"]:
+    # Copy viewers + Office viewer JS bundles (self-hosted, no CDN).
+    viewer_files = [
+        "viewer.html",
+        "md-viewer.html",
+        "yaml-viewer.html",
+        "office-viewer.html",
+        "sheetjs.min.js",
+        "mammoth.min.js",
+    ]
+    for viewer in viewer_files:
         src = template_dir / viewer
         dst = out_dir / viewer
         if src.exists():
@@ -630,6 +638,31 @@ def main():
         print(f"\nWARNING: {docs_link} does not exist.")
         print(f"  Run: ln -s {repo_path} {docs_link}")
         print(f"  Or run: python3 serve.py init {config_path}")
+
+    # Pre-convert Office files to PDF so the PWA's office-viewer.html can serve
+    # them through the existing PDF.js viewer. Soft-fail when LibreOffice or the
+    # converter script isn't available — the PWA degrades to client-side
+    # SheetJS/mammoth for .xlsx/.docx and a download prompt for other formats.
+    convert_script = Path(__file__).parent / "convert-office.py"
+    if convert_script.exists():
+        print(f"\n→ Running Office pre-conversion ({convert_script.name}) …")
+        try:
+            r = subprocess.run(
+                [sys.executable, str(convert_script), str(config_path)],
+                capture_output=True, text=True, timeout=600,
+            )
+            # Surface a tight tail so the scan log stays readable.
+            tail_lines = (r.stdout or "").strip().splitlines()[-6:]
+            for line in tail_lines:
+                print(f"  {line}")
+            if r.returncode not in (0, 2):  # 2 = some files failed; still ran
+                print(f"  (convert-office exit {r.returncode}; see stderr)")
+                if r.stderr:
+                    sys.stderr.write(r.stderr)
+        except subprocess.TimeoutExpired:
+            print("  ! convert-office timed out (>10 min); skipping")
+        except Exception as e:
+            print(f"  ! convert-office failed to start: {e}")
 
     print(f"\nDone. Updated at {datetime.now().strftime('%Y-%m-%d %H:%M')}")
 

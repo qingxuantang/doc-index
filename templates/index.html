@@ -238,9 +238,18 @@ document.addEventListener('click', function(e) {
                 window.open(baseUrl + href, '_blank');
             }
         }).catch(() => window.open(baseUrl + href, '_blank'));
-    } else if (['xlsx','xls','pptx','docx'].includes(ext)) {
-        const msUrl = 'https://view.officeapps.live.com/op/view.aspx?src=' + encodeURIComponent(rawUrl);
-        window.open(msUrl, '_blank');
+    } else if (['xlsx','xls','pptx','ppt','docx','doc'].includes(ext)) {
+        // Office files preview via local office-viewer.html (PDF.js on a
+        // pre-converted PDF when available, JS fallback otherwise).
+        // Falls back to raw download if office-viewer.html isn't deployed.
+        const officeViewer = baseUrl + 'office-viewer.html';
+        fetch(officeViewer, {method: 'HEAD'}).then(r => {
+            if (r.ok) {
+                window.open(officeViewer + '?file=' + encodeURIComponent(rawUrl), '_blank');
+            } else {
+                window.open(baseUrl + href, '_blank');
+            }
+        }).catch(() => window.open(baseUrl + href, '_blank'));
     } else {
         window.open(baseUrl + href, '_blank');
     }
