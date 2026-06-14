@@ -166,6 +166,46 @@ external_sources:
 
 Reference implementation: `adapters/github_releases.py`.
 
+## Optional: Sync to a Shared Repo (Multi-Device Mesh)
+
+For setups where `doc-index` runs on one device but the indexed docs need to
+be readable from other devices (team knowledge hub, multi-device snapshot
+mesh, cross-team review), enable a post-scan sync step.
+
+Add a `sync:` block to your project's `doc-index.yaml`:
+
+```yaml
+sync:
+  enabled: true
+  remote_url: "https://USER:TOKEN@github.com/your-org/shared-docs.git"
+  remote_branch: "main"
+  target_subdir: "shared/doc-index/your-project"
+  include_docs: true     # publish source docs so receivers can read content
+  include_html: true     # publish generated _index.html so receivers see the PWA
+```
+
+After each `scan.py` run, `scripts/sync.py` runs:
+
+1. Clones (first time) or fetches+hard-resets (subsequent) the configured remote
+2. Recreates `<target_subdir>/` inside the clone with source docs + `_index.html` + `_manifest.json`
+3. Commits + pushes if anything changed (retries once with `pull --rebase` on conflict)
+
+Sync **soft-fails** — sync errors don't break `scan.py`. The local PWA keeps working even when the shared repo is unreachable.
+
+Run sync manually:
+
+```bash
+python3 scripts/sync.py /path/to/project/doc-index.yaml             # publish now
+python3 scripts/sync.py /path/to/project/doc-index.yaml --dry-run    # preview only
+```
+
+Common use cases:
+- **Multi-device team mesh**: each device pushes its indexed docs to a shared repo. `git pull` on any other device gives you the latest snapshot of every project.
+- **Snapshot history**: the shared repo's git log doubles as a doc change history.
+- **Cross-team review**: lifting docs from local-only to git-versioned makes them reviewable in PRs.
+
+Auth: embed a token directly in `remote_url` (HTTPS), or use SSH with key/agent forwarding. The token is redacted in sync.py logs.
+
 ## Critical Rules
 
 - **Doc-only filter is core to the product** — adding source-code extensions to `repo.file_types` is almost always a misuse. Use a separate tool for code search.

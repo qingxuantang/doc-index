@@ -121,6 +121,33 @@ tags:
     updated: "Updated"
     latest: "Latest"
 
+sync:
+  # Optional: mirror this project's generated index + source docs to a shared
+  # git repo. Useful when doc-index runs on one device but the indexed docs
+  # need to be readable from other devices (team-shared knowledge hub,
+  # cross-device mesh, snapshot history).
+  #
+  # When enabled, scan.py invokes scripts/sync.py at the end:
+  #   1. Clone (first run) or fetch+reset (subsequent) the configured repo
+  #   2. Recreate <target_subdir>/ inside the clone with:
+  #      - source docs matching repo.file_types / repo.ignore
+  #      - generated _index.html + _manifest.json (if include_html=true)
+  #   3. Commit + push if anything changed.
+  #
+  # SOFT-FAIL: sync errors don't break scan.py — your local PWA still works.
+  #
+  # Authentication: embed a token in remote_url (HTTPS) or use SSH with an
+  # agent forwarding key. Either works.
+  enabled: false                              # Set true to opt in
+  remote_url: "<YOUR_SHARED_REPO_GIT_URL>"    # e.g. https://USER:TOKEN@github.com/your-org/team-docs.git
+  remote_branch: "main"                       # Branch to push to
+  target_subdir: "<TARGET_SUBDIR_IN_REPO>"    # Where in the repo to publish.
+                                              # e.g. "shared/doc-index/your-project"
+  local_clone_dir: ""                         # Optional. Default: ~/.cache/doc-index-sync/<short_name>
+  include_docs: true                          # Publish source docs (receivers get readable content)
+  include_html: true                          # Publish generated _index.html so receivers see the rendered PWA
+  commit_message_template: "doc-index sync: {project} @ {timestamp}"
+
 triggers:
   cron: ""                              # Cron expression, empty = disabled. e.g. "0 */6 * * *"
   manual: true                          # Always true — can always run scan.py manually

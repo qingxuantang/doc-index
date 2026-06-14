@@ -664,6 +664,29 @@ def main():
         except Exception as e:
             print(f"  ! convert-office failed to start: {e}")
 
+    # Optional post-scan sync: mirror generated index + source docs to a shared
+    # git repo. No-op unless `sync.enabled: true` in config. Soft-fail so sync
+    # errors don't break the local index workflow.
+    sync_script = Path(__file__).parent / "sync.py"
+    if sync_script.exists() and cfg.get("sync", {}).get("enabled", False):
+        print(f"\n→ Running shared-repo sync ({sync_script.name}) …")
+        try:
+            r = subprocess.run(
+                [sys.executable, str(sync_script), str(config_path)],
+                capture_output=True, text=True, timeout=300,
+            )
+            tail_lines = (r.stdout or "").strip().splitlines()[-8:]
+            for line in tail_lines:
+                print(f"  {line}")
+            if r.returncode != 0:
+                print(f"  (sync exit {r.returncode}; see stderr)")
+                if r.stderr:
+                    sys.stderr.write(r.stderr)
+        except subprocess.TimeoutExpired:
+            print("  ! sync timed out (>5 min); skipping")
+        except Exception as e:
+            print(f"  ! sync failed to start: {e}")
+
     print(f"\nDone. Updated at {datetime.now().strftime('%Y-%m-%d %H:%M')}")
 
 
