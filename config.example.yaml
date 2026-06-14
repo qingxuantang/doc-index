@@ -147,6 +147,12 @@ sync:
   include_docs: true                          # Publish source docs (receivers get readable content)
   include_html: true                          # Publish generated _index.html so receivers see the rendered PWA
   commit_message_template: "doc-index sync: {project} @ {timestamp}"
+  # Optional git commit identity (LOCAL to the sync clone, never --global).
+  # Defaults are a generic bot identity; override if you want commits attributed
+  # to a specific user. Useful when running on a server where root has no
+  # global git identity configured.
+  author_name: ""                             # default: "doc-index-sync"
+  author_email: ""                            # default: "noreply@doc-index.local"
 
 triggers:
   cron: ""                              # Cron expression, empty = disabled. e.g. "0 */6 * * *"

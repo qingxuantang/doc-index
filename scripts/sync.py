@@ -80,8 +80,14 @@ def collect_source_docs(repo_path, file_types, ignore_patterns):
     return docs
 
 
-def ensure_local_clone(remote_url, branch, local_dir):
-    """Ensure local_dir contains a git clone of remote_url@branch."""
+def ensure_local_clone(remote_url, branch, local_dir, author_name=None, author_email=None):
+    """Ensure local_dir contains a git clone of remote_url@branch.
+
+    Also configures a local git identity inside the clone (NOT globally) so
+    sync commits work even when the host root user has no global git identity
+    set. Defaults are a generic bot identity; override via sync.author_name /
+    sync.author_email in config.yaml.
+    """
     local_dir = Path(local_dir).expanduser()
     if (local_dir / ".git").exists():
         _run(["git", "-C", str(local_dir), "fetch", "origin", branch])
@@ -92,6 +98,13 @@ def ensure_local_clone(remote_url, branch, local_dir):
     else:
         local_dir.parent.mkdir(parents=True, exist_ok=True)
         _run(["git", "clone", "--depth", "1", "--branch", branch, remote_url, str(local_dir)])
+
+    # Set local identity inside the clone. Safe to call repeatedly — git just
+    # overwrites. Local-only (not --global), scoped to this clone.
+    _run(["git", "-C", str(local_dir), "config", "user.name",
+          author_name or "doc-index-sync"])
+    _run(["git", "-C", str(local_dir), "config", "user.email",
+          author_email or "noreply@doc-index.local"])
     return local_dir
 
 
@@ -193,13 +206,19 @@ def main(argv):
         if "@" in rest:
             display_remote = f"{scheme}://<redacted>@{rest.split('@', 1)[1]}"
 
+    author_name = sync_cfg.get("author_name")
+    author_email = sync_cfg.get("author_email")
+
     print("→ Sync to shared repo …")
     print(f"  Remote: {display_remote}  (branch: {branch})")
     print(f"  Target subdir: {target_subdir}")
     print(f"  Local clone: {local_clone_dir}")
 
     try:
-        clone_dir = ensure_local_clone(remote_url, branch, local_clone_dir)
+        clone_dir = ensure_local_clone(
+            remote_url, branch, local_clone_dir,
+            author_name=author_name, author_email=author_email,
+        )
 
         source_pairs = []
         if include_docs:
