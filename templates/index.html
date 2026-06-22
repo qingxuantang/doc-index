@@ -140,6 +140,41 @@
         }
         .file-tag.latest { background: #e8f5e9; color: #2e7d32; }
         .file-tag.submitted { background: #fff3e0; color: #e65100; }
+        .file-tag.offline { background: #e3f2fd; color: #1565c0; }
+        .offline-bar {
+            background: #fff;
+            margin: 12px;
+            border-radius: 10px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            font-size: 13px;
+        }
+        .offline-bar #cache-btn {
+            background: {{COLOR}};
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .offline-bar #cache-btn:disabled { opacity: 0.5; cursor: default; }
+        .offline-bar #cache-status { color: #666; flex: 1; min-width: 140px; }
+        .offline-bar #online-indicator {
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .offline-bar.offline #online-indicator { background: #fff3e0; color: #e65100; }
         .updated { font-size: 11px; color: #999; text-align: center; padding: 16px; }
         .back-top {
             position: fixed;
@@ -168,6 +203,12 @@
 <div class="header">
     <h1>{{PROJECT_NAME}}</h1>
     <div class="sub">{{SUBTITLE}}</div>
+</div>
+
+<div class="offline-bar" id="offline-bar">
+    <button id="cache-btn" type="button">缓存离线</button>
+    <span id="cache-status">在线时点缓存，断网后仍可访问已下载的文档</span>
+    <span id="online-indicator">在线</span>
 </div>
 
 {{QUICK_LINKS}}
@@ -255,9 +296,106 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// Register service worker for PWA
+// ── PWA: Service Worker + offline cache UX ────────────────────────────
+const CACHE_NAME = 'doc-index-v2';
+
+function updateOnlineStatus() {
+    const bar = document.getElementById('offline-bar');
+    const ind = document.getElementById('online-indicator');
+    if (!bar || !ind) return;
+    if (navigator.onLine) {
+        bar.classList.remove('offline');
+        ind.textContent = '在线';
+    } else {
+        bar.classList.add('offline');
+        ind.textContent = '离线模式';
+    }
+}
+
+// Collect every file URL rendered on the page so we can cache them all in
+// one click. We deliberately scrape the DOM rather than depending on a
+// pre-generated files.json — this keeps the PWA layer universal across
+// any doc-index instance.
+function collectFileUrls() {
+    const urls = new Set();
+    document.querySelectorAll('a.file-item').forEach(a => {
+        const href = a.getAttribute('href');
+        if (href && !/^https?:/i.test(href)) urls.add(href);
+    });
+    // Cache the viewer shells too so PDF / MD / YAML / Office preview work offline.
+    ['viewer.html', 'md-viewer.html', 'yaml-viewer.html', 'office-viewer.html',
+     'sheetjs.min.js', 'mammoth.min.js', 'manifest.json'].forEach(u => urls.add(u));
+    return Array.from(urls);
+}
+
+async function markCachedFiles() {
+    if (!('caches' in window)) return;
+    try {
+        const cache = await caches.open(CACHE_NAME);
+        const keys = await cache.keys();
+        const cachedPaths = new Set(keys.map(r => new URL(r.url).pathname));
+        document.querySelectorAll('a.file-item').forEach(a => {
+            const href = a.getAttribute('href');
+            if (!href || /^https?:/i.test(href)) return;
+            const absPath = new URL(href, location.href).pathname;
+            if (cachedPaths.has(absPath) && !a.querySelector('.file-tag.offline')) {
+                const badge = document.createElement('span');
+                badge.className = 'file-tag offline';
+                badge.textContent = '离线可用';
+                a.appendChild(badge);
+            }
+        });
+    } catch (_) { /* best-effort */ }
+}
+
+async function cacheOffline() {
+    const btn = document.getElementById('cache-btn');
+    const status = document.getElementById('cache-status');
+    if (!('caches' in window)) {
+        status.textContent = '当前浏览器不支持离线缓存';
+        return;
+    }
+    btn.disabled = true;
+    const urls = collectFileUrls();
+    if (urls.length === 0) {
+        status.textContent = '没有可缓存的文件';
+        btn.disabled = false;
+        return;
+    }
+    let ok = 0, fail = 0;
+    try {
+        const cache = await caches.open(CACHE_NAME);
+        for (let i = 0; i < urls.length; i++) {
+            status.textContent = `缓存中 ${i + 1}/${urls.length}...`;
+            try {
+                await cache.add(urls[i]);
+                ok++;
+            } catch (_) {
+                fail++;
+            }
+        }
+        const tail = fail ? `（${fail} 个失败）` : '';
+        status.textContent = `已缓存 ${ok}/${urls.length} 个文件，可离线访问${tail}`;
+        btn.textContent = '更新缓存';
+        await markCachedFiles();
+    } catch (e) {
+        status.textContent = '缓存失败：' + (e && e.message ? e.message : e);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+document.getElementById('cache-btn').addEventListener('click', cacheOffline);
+window.addEventListener('online', updateOnlineStatus);
+window.addEventListener('offline', updateOnlineStatus);
+updateOnlineStatus();
+
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('sw.js').then(() => {
+        // Once the SW is ready, scan the cache and mark files that are
+        // already available offline (useful on repeat visits).
+        markCachedFiles();
+    }).catch(() => {});
 }
 </script>
 
