@@ -297,7 +297,7 @@ document.addEventListener('click', function(e) {
 });
 
 // ── PWA: Service Worker + offline cache UX ────────────────────────────
-const CACHE_NAME = 'doc-index-v2';
+const CACHE_NAME = 'doc-index-v3';
 
 function updateOnlineStatus() {
     const bar = document.getElementById('offline-bar');
@@ -322,9 +322,13 @@ function collectFileUrls() {
         const href = a.getAttribute('href');
         if (href && !/^https?:/i.test(href)) urls.add(href);
     });
-    // Cache the viewer shells too so PDF / MD / YAML / Office preview work offline.
+    // Cache the viewer shells AND their JS deps so PDF / MD / YAML / Office preview work offline.
+    // marked.min.js and js-yaml.min.js are mandatory — without them md-viewer / yaml-viewer
+    // load but stay stuck at "Loading..." offline (the renderer library is missing).
     ['viewer.html', 'md-viewer.html', 'yaml-viewer.html', 'office-viewer.html',
-     'sheetjs.min.js', 'mammoth.min.js', 'manifest.json'].forEach(u => urls.add(u));
+     'sheetjs.min.js', 'mammoth.min.js',
+     'marked.min.js', 'js-yaml.min.js',
+     'manifest.json'].forEach(u => urls.add(u));
     return Array.from(urls);
 }
 

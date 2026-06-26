@@ -9,7 +9,7 @@
 //       — the user opts in to download all docs while online.
 //
 // Bump CACHE_NAME to invalidate everything on the next install.
-const CACHE_NAME = 'doc-index-v2';
+const CACHE_NAME = 'doc-index-v3';
 const MAX_CACHE_ITEMS = 500;
 
 self.addEventListener('install', () => {

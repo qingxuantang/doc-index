@@ -623,6 +623,11 @@ def main():
         "office-viewer.html",
         "sheetjs.min.js",
         "mammoth.min.js",
+        # marked + js-yaml are self-hosted so the offline-cache button can pre-fetch them.
+        # Without these, md-viewer.html and yaml-viewer.html depend on jsdelivr at runtime,
+        # which the Service Worker cannot intercept (cross-origin), breaking offline mode.
+        "marked.min.js",
+        "js-yaml.min.js",
     ]
     for viewer in viewer_files:
         src = template_dir / viewer
