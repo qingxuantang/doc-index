@@ -196,6 +196,42 @@
             -webkit-tap-highlight-color: transparent;
         }
         .back-top:active { opacity: 1; }
+
+        /* Design Doc Gate — pinned card at the top */
+        .design-card {
+            background: #fff;
+            margin: 12px;
+            border-radius: 10px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            overflow: hidden;
+            border-left: 4px solid {{COLOR}};
+        }
+        .design-card .dd-main {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            text-decoration: none;
+            color: #333;
+            border-bottom: none;
+        }
+        .design-card a.dd-main:active { background: #f0f7ff; }
+        .design-card .dd-icon { font-size: 20px; flex-shrink: 0; line-height: 1; }
+        .design-card .dd-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .design-card .dd-title { font-weight: 600; font-size: 14px; }
+        .design-card .dd-meta { font-size: 12px; color: #888; word-break: break-word; }
+        .design-card .dd-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 9px;
+            border-radius: 999px;
+            flex-shrink: 0;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .design-card .dd-badge.dd-green { background: #e8f5e9; color: #2e7d32; }
+        .design-card .dd-badge.dd-amber { background: #fff3e0; color: #e65100; }
+        .design-card .dd-badge.dd-red { background: #fdecea; color: #c0392b; }
     </style>
 </head>
 <body>
@@ -210,6 +246,8 @@
     <span id="cache-status">在线时点缓存，断网后仍可访问已下载的文档</span>
     <span id="online-indicator">在线</span>
 </div>
+
+{{DESIGN_DOC_CARD}}
 
 {{QUICK_LINKS}}
 

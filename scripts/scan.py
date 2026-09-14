@@ -20,6 +20,8 @@ from urllib.parse import quote
 
 import yaml
 
+import design_doc
+
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -480,6 +482,9 @@ def render_index(cfg, sections):
     # Quick links
     quick_links_html = render_quick_links(cfg.get("quick_links", []))
 
+    # Design Doc Gate: pinned card at the top of the page (empty when disabled)
+    design_doc_card = design_doc.card_html(cfg, cfg["repo"]["path"], url_base)
+
     # Sections
     section_blocks = []
     for sec_name, sec in sections.items():
@@ -517,6 +522,7 @@ def render_index(cfg, sections):
     html = html.replace("{{COLOR}}", color)
     html = html.replace("{{COLOR2}}", color2)
     html = html.replace("{{QUICK_LINKS}}", quick_links_html)
+    html = html.replace("{{DESIGN_DOC_CARD}}", design_doc_card)
     html = html.replace("{{SECTIONS}}", sections_html)
     html = html.replace("{{UPDATED}}", now_str)
     html = html.replace("{{URL_BASE}}", url_base)
@@ -575,6 +581,14 @@ def main():
                 total_files += len(nested.get("files", []))
 
     print(f"Found: {len(sections)} sections, {total_files} files")
+
+    # Design Doc Gate: absence / staleness is a signal, never silent.
+    dd = design_doc.dd_config(cfg)
+    if dd["enabled"]:
+        flag, detail, reasons = design_doc.freshness(cfg, repo_path)
+        print(f"Design doc: {flag} {dd['path']} — {detail}")
+        if flag == design_doc.RED:
+            sys.stderr.write(f"WARNING: design doc needs attention — {detail}\n")
 
     if dry_run:
         print("\n[DRY RUN] Would generate:")

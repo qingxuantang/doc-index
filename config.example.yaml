@@ -55,6 +55,23 @@ serve:
     password: ""                                 # Filled in by init (or set manually)
     htpasswd_path: ""                            # Filled in by init: <serve.root>/.htpasswd
 
+design_doc:
+  # Design Doc Gate — make a project design doc a first-class citizen.
+  # On first deploy (`serve.py init`) doc-index ensures this project has a
+  # design doc: it ADOPTS an existing docs/DESIGN.md, INCORPORATES scattered
+  # design docs by linking them in place, or GENERATES a seed from the template.
+  # Every scan then reports the doc's freshness and pins a status card on the
+  # PWA. See DESIGN_DOC_CONVENTION.md.
+  enabled: true                         # false = feature off for this project
+  path: docs/DESIGN.md                  # canonical location (relative to repo.path)
+  required_on_init: true                # init ensures one exists; only a real IO error fails
+  template: default                     # default | minimal | <path to a custom .md>
+  proposal_ledger: true                 # keep + surface a Proposal Ledger section
+  auto_snapshot:                        # optional live-config block spliced into AUTO:START/END
+    enabled: false
+    generator: ""                       # path to a project-specific snapshot generator (optional)
+    max_age_h: 25                       # snapshot older than this -> red (feeds the freshness check)
+
 quick_links: []                         # Shortcut links at top of page
   # - label: "Project Homepage"
   #   url: "https://example.com"

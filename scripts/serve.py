@@ -16,6 +16,8 @@ from pathlib import Path
 
 import yaml
 
+import design_doc
+
 
 def load_config(path):
     with open(path, "r", encoding="utf-8") as f:
@@ -157,6 +159,15 @@ def setup_cron(cfg, config_path):
         return True, f"Cron job added: {cron_cmd}"
     else:
         return False, f"Failed to set cron: {proc.stderr}"
+
+
+def ensure_design_doc(cfg):
+    """Design Doc Gate: make sure this project has a design doc before it goes
+    live. Adopt an existing one, incorporate scattered design docs by reference,
+    or generate a seed. Non-blocking (auto-seeds); only a real IO failure fails.
+    """
+    ok, action, msg = design_doc.ensure(cfg, cfg["repo"]["path"])
+    return ok, f"[{action}] {msg}"
 
 
 def run_initial_scan(cfg, config_path):
@@ -351,6 +362,7 @@ def cmd_init(config_path):
         ("Copy templates", lambda: copy_templates(cfg["serve"]["root"])),
         ("Setup basic auth", lambda: setup_auth(cfg, config_path)),
         ("Setup cron", lambda: setup_cron(cfg, config_path)),
+        ("Design doc", lambda: ensure_design_doc(cfg)),
         ("Initial scan", lambda: run_initial_scan(cfg, config_path)),
     ]
 

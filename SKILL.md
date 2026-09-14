@@ -113,6 +113,18 @@ If `triggers.cron` is set, `serve.py init` adds it to crontab. Logs go to `<serv
 python3 /path/to/doc-index/scripts/scan.py /path/to/project/doc-index.yaml
 ```
 
+## Design Doc Gate
+
+On first deploy, `serve.py init` ensures the project has a design doc
+(`docs/DESIGN.md`): it **adopts** an existing one, **incorporates** scattered
+design docs by linking them in place, or **generates** a seed from the template.
+Every `scan.py` run then reports the doc's freshness and pins a status card at
+the top of the PWA. The doc carries a **Proposal Ledger** so all changes flow
+`Proposal → Approved → Landed → Implemented`.
+
+Configured via the `design_doc:` block in `doc-index.yaml` (on by default; set
+`enabled: false` to opt out). Full convention: `DESIGN_DOC_CONVENTION.md`.
+
 ## What gets indexed (doc-only)
 
 Doc-index is **deliberately a documentation browser, not a code browser**. Its job: help someone glance at a project and understand the plan / spec / diagrams / notes — without ever opening source code.
@@ -148,6 +160,7 @@ See `config.example.yaml` for all fields. Key fields:
 - `sections.*` — auto-generate from folders + optional per-folder overrides
 - `tags.*` — auto-tag new/updated files based on git timestamps
 - `triggers.cron` — cron schedule (5-field expression)
+- `design_doc.*` — Design Doc Gate: mandatory-on-init design doc + Proposal Ledger + PWA freshness card (see `DESIGN_DOC_CONVENTION.md`)
 - `external_sources` — adapter configs for pulling from APIs
 
 ## Adapters (External Sources)
