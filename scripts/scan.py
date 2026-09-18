@@ -469,6 +469,18 @@ def render_quick_links(links):
     )
 
 
+def base_font_sizes(cfg):
+    """Root font size (px) and its mobile bump. One knob (serve.base_font_px,
+    default 16, clamped 10-28) drives every rem-based font-size in the PWA and
+    its HTML viewers; phones (<=480px) get +1px."""
+    try:
+        base = int(cfg.get("serve", {}).get("base_font_px", 16))
+    except (TypeError, ValueError):
+        base = 16
+    base = max(10, min(base, 28))
+    return base, base + 1
+
+
 def render_index(cfg, sections):
     """Render complete index.html."""
     p = cfg["project"]
@@ -514,15 +526,8 @@ def render_index(cfg, sections):
     with open(template_path, "r", encoding="utf-8") as f:
         template = f.read()
 
-    # Base font size (px). One knob drives the whole page: every CSS font-size
-    # is a rem off this root. Mobile (<=480px) gets +1px for comfort. Configure
-    # per project via serve.base_font_px; default 16 (browser-standard).
-    try:
-        base_font_px = int(cfg["serve"].get("base_font_px", 16))
-    except (TypeError, ValueError):
-        base_font_px = 16
-    base_font_px = max(10, min(base_font_px, 28))  # sane clamp
-    mobile_font_px = base_font_px + 1
+    # Base font size (px): one knob, every CSS font-size is a rem off this root.
+    base_font_px, mobile_font_px = base_font_sizes(cfg)
 
     # Replace placeholders
     html = template.replace("{{LANG}}", lang)
@@ -655,12 +660,22 @@ def main():
         "marked.min.js",
         "js-yaml.min.js",
     ]
+    v_base, v_mobile = base_font_sizes(cfg)
     for viewer in viewer_files:
         src = template_dir / viewer
         dst = out_dir / viewer
         if src.exists():
             import shutil
-            shutil.copy2(src, dst)
+            if viewer.endswith(".html"):
+                # HTML viewers may carry the same base-font placeholders as the
+                # index; substitute so the doc reader honors serve.base_font_px.
+                txt = src.read_text(encoding="utf-8")
+                if "{{BASE_FONT_PX}}" in txt:
+                    txt = (txt.replace("{{BASE_FONT_PX}}", str(v_base))
+                              .replace("{{BASE_FONT_PX_MOBILE}}", str(v_mobile)))
+                dst.write_text(txt, encoding="utf-8")
+            else:
+                shutil.copy2(src, dst)
             print(f"Copied: {dst}")
 
     # Check if docs symlink exists
