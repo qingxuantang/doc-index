@@ -514,6 +514,16 @@ def render_index(cfg, sections):
     with open(template_path, "r", encoding="utf-8") as f:
         template = f.read()
 
+    # Base font size (px). One knob drives the whole page: every CSS font-size
+    # is a rem off this root. Mobile (<=480px) gets +1px for comfort. Configure
+    # per project via serve.base_font_px; default 16 (browser-standard).
+    try:
+        base_font_px = int(cfg["serve"].get("base_font_px", 16))
+    except (TypeError, ValueError):
+        base_font_px = 16
+    base_font_px = max(10, min(base_font_px, 28))  # sane clamp
+    mobile_font_px = base_font_px + 1
+
     # Replace placeholders
     html = template.replace("{{LANG}}", lang)
     html = html.replace("{{PROJECT_NAME}}", esc(name))
@@ -526,6 +536,8 @@ def render_index(cfg, sections):
     html = html.replace("{{SECTIONS}}", sections_html)
     html = html.replace("{{UPDATED}}", now_str)
     html = html.replace("{{URL_BASE}}", url_base)
+    html = html.replace("{{BASE_FONT_PX}}", str(base_font_px))
+    html = html.replace("{{BASE_FONT_PX_MOBILE}}", str(mobile_font_px))
 
     return html
 

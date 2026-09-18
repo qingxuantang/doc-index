@@ -48,6 +48,9 @@ serve:
   root: /usr/share/nginx/html/your-project-docs  # Output directory for generated site
   url_base: /your-project-docs/                  # URL path prefix (for nginx location)
   domain: ""                                     # REQUIRED for full server block — e.g. "docs.example.com"
+  base_font_px: 16                               # Root font size (px). One knob: every font-size
+                                                 # is a rem off this; mobile (<=480px) gets +1px.
+                                                 # Bump to 17-18 for larger text. Default 16.
   auth:                                          # Basic auth — ON by default
     enabled: true
     user: "admin"                                # Login user
