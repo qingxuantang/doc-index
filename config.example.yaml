@@ -70,6 +70,12 @@ design_doc:
   required_on_init: true                # init ensures one exists; only a real IO error fails
   template: default                     # default | minimal | <path to a custom .md>
   proposal_ledger: true                 # keep + surface a Proposal Ledger section
+  # When proposal_ledger is on, every scan also SYNCS proposal files into the
+  # ledger: it reads docs/10-next/PROPOSAL_*.md (and docs/90-archive/), appends a
+  # row for any proposal not yet listed, advances status forward, and once a
+  # proposal is landed/implemented auto-fills "Approved by" (Author) and "Landed"
+  # (Date). Idempotent; skipped if the ledger table can't be parsed. See
+  # DESIGN_DOC_CONVENTION.md for the fixed PROPOSAL_*.md format.
   auto_snapshot:                        # optional live-config block spliced into AUTO:START/END
     enabled: false
     generator: ""                       # path to a project-specific snapshot generator (optional)
@@ -181,10 +187,12 @@ pre_scan_hooks: []                      # Scripts to run BEFORE the index scan.
   # configured repo path.  Hooks run in order; a non-zero exit warns
   # but does not abort the scan.
   #
-  # - name: "Sync Proposal Ledger"
-  #   command: "python3 ${repo.path}/sync_proposal_ledger.py"
+  # (Proposal-Ledger syncing is built in — see design_doc.proposal_ledger — so it
+  # does NOT need a hook.) Use hooks for project-specific prep, e.g.:
   # - name: "Pull External Data"
   #   command: "python3 ${repo.path}/scripts/fetch-data.py"
+  # - name: "Generate Summary"
+  #   command: "python3 ${repo.path}/scripts/build-summary.py"
 
 triggers:
   cron: ""                              # Cron expression, empty = disabled. e.g. "0 */6 * * *"

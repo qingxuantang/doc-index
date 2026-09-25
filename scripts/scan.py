@@ -636,6 +636,16 @@ def main():
     # Run pre-scan hooks (project-specific scripts that prepare data before indexing)
     run_pre_scan_hooks(cfg)
 
+    # Sync the Proposal Ledger from proposal files so DESIGN.md is current
+    # BEFORE it gets indexed (design-doc feature; no-op when disabled).
+    _dd = design_doc.dd_config(cfg)
+    if _dd["enabled"] and _dd["proposal_ledger"]:
+        _sync = design_doc.sync_ledger(cfg, repo_path, dry_run=dry_run)
+        if _sync["added"] or _sync["updated"]:
+            print(f"Proposal Ledger: +{len(_sync['added'])} new / "
+                  f"{len(_sync['updated'])} updated"
+                  + (" [dry-run]" if dry_run else ""))
+
     print(f"Scanning: {repo_path}")
     sections = scan_repo(cfg)
 

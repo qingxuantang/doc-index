@@ -305,6 +305,239 @@ def ledger_counts(text):
     return counts
 
 
+# ── proposal ledger sync ──────────────────────────────────────────────────────
+
+STATUS_ORDER = ("proposed", "approved", "landed", "implemented", "superseded")
+_FILLED_STATUSES = ("landed", "implemented")   # when Approved by / Landed auto-fill
+_LEDGER_PLACEHOLDER = "—"                  # em dash used for empty cells
+_DEFAULT_PROPOSAL_DIRS = ("docs/10-next", "docs/90-archive")
+
+# Fixed proposal header format (see DESIGN_DOC_CONVENTION.md):
+#   # Proposal: <title>
+#   > Date: YYYY-MM-DD · Author: <name> · Status: <status>
+_PROP_TITLE_RE = re.compile(r"^#\s+Proposal[\s:#-]+(.+?)\s*$", re.MULTILINE)
+_PROP_META_RE = re.compile(
+    r"^>\s*Date:\s*(\d{4}-\d{2}-\d{2})\s*·\s*Author:\s*(.+?)\s*·\s*"
+    r"Status:\s*\*{0,2}([A-Za-z]+)\*{0,2}",
+    re.MULTILINE,
+)
+_LEDGER_HEADER_RE = re.compile(r"^\|\s*#\s*\|\s*Date\s*\|", re.IGNORECASE)
+
+
+def _status_rank(s):
+    try:
+        return STATUS_ORDER.index((s or "").strip().lower())
+    except ValueError:
+        return -1
+
+
+def _proposal_dirs(dd):
+    dirs = dd.get("proposal_dirs")
+    return list(dirs) if dirs else list(_DEFAULT_PROPOSAL_DIRS)
+
+
+def _parse_proposal(path):
+    """Parse a PROPOSAL_*.md header. Return a dict, or None if it does not match
+    the fixed format (only the first 10 lines are inspected)."""
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return None
+    header = "\n".join(text.splitlines()[:10])
+    tm = _PROP_TITLE_RE.search(header)
+    mm = _PROP_META_RE.search(header)
+    if not tm or not mm:
+        return None
+    return {
+        "slug": path.stem,                     # PROPOSAL_<slug>
+        "title": tm.group(1).strip(),
+        "date": mm.group(1).strip(),
+        "author": mm.group(2).strip(),
+        "status": mm.group(3).strip().lower(),
+    }
+
+
+def _slug_from_detail(detail):
+    m = re.search(r"PROPOSAL_[\w-]+", detail or "")
+    return m.group(0) if m else None
+
+
+def _split_ledger_row(line):
+    """'| a | b | c |' -> ['a', 'b', 'c']; None if not a table row."""
+    s = line.strip()
+    if not s.startswith("|"):
+        return None
+    return [c.strip() for c in s.strip().strip("|").split("|")]
+
+
+def _render_ledger_row(cells):
+    return "| " + " | ".join(cells) + " |"
+
+
+def _find_ledger_table(text):
+    """Locate the Proposal Ledger table under LEDGER_HEADING.
+
+    Returns {found, header_line, sep_line, span_end, rows} or {found: False}.
+    Only well-formed 7-column data rows are collected; a row of a different
+    width stops the scan so we never rewrite a table we do not fully understand.
+    """
+    lines = text.splitlines()
+    header_line = None
+    in_section = False
+    for i, ln in enumerate(lines):
+        if ln.strip().startswith(LEDGER_HEADING):
+            in_section = True
+            continue
+        if in_section:
+            if ln.startswith("## ") and LEDGER_HEADING not in ln:
+                break
+            if _LEDGER_HEADER_RE.match(ln.strip()):
+                header_line = i
+                break
+    if header_line is None:
+        return {"found": False}
+
+    rows, sep_line, span_end = [], None, header_line
+    i = header_line + 1
+    while i < len(lines) and lines[i].strip().startswith("|"):
+        cells = _split_ledger_row(lines[i])
+        span_end = i
+        if cells and all(c and set(c) <= set("-: ") for c in cells):
+            sep_line = i                       # separator row (|---|---|...)
+        elif cells and len(cells) == 7:
+            num = cells[0]
+            rows.append({
+                "cells": cells, "line": i,
+                "num": int(num) if num.isdigit() else None,
+                "title": cells[2], "status": cells[3].strip().lower(),
+                "approved": cells[4], "landed": cells[5], "detail": cells[6],
+            })
+        else:
+            break                              # unexpected width -> stop, don't touch
+        i += 1
+    return {"found": True, "header_line": header_line, "sep_line": sep_line,
+            "span_end": span_end, "rows": rows}
+
+
+def _is_placeholder_row(row):
+    return "no proposals yet" in row["title"].lower()
+
+
+def sync_ledger(cfg, repo_path, dry_run=False):
+    """Sync PROPOSAL_*.md files into the DESIGN.md Proposal Ledger.
+
+    Scans the fixed proposal dirs (docs/10-next active + docs/90-archive), and
+    for each proposal: appends a ledger row if missing, advances an existing
+    row's status forward (never backward), and -- once status reaches
+    landed/implemented -- auto-fills 'Approved by' (the proposal's Author) and
+    'Landed' (its Date). Idempotent; a no-op when the feature is disabled, no
+    proposals exist, or the ledger table cannot be parsed. Returns
+    {'added': [...], 'updated': [...], 'skipped': str | None}.
+    """
+    dd = dd_config(cfg)
+    result = {"added": [], "updated": [], "skipped": None}
+    if not dd["enabled"] or not dd["proposal_ledger"]:
+        result["skipped"] = "disabled"
+        return result
+
+    repo = Path(repo_path)
+    design_md = repo / dd["path"]
+    if not design_md.is_file():
+        result["skipped"] = "design doc not found"
+        return result
+
+    # 1. collect proposals (prefer the furthest-along status if a slug repeats)
+    proposals = {}
+    for rel in _proposal_dirs(dd):
+        d = repo / rel
+        if not d.is_dir():
+            continue
+        for f in sorted(d.glob("PROPOSAL_*.md")):
+            p = _parse_proposal(f)
+            if not p:
+                continue
+            p["rel_path"] = os.path.relpath(f, repo)
+            prev = proposals.get(p["slug"])
+            if prev is None or _status_rank(p["status"]) >= _status_rank(prev["status"]):
+                proposals[p["slug"]] = p
+    if not proposals:
+        result["skipped"] = "no proposals"
+        return result
+
+    text = design_md.read_text(encoding="utf-8", errors="ignore")
+    table = _find_ledger_table(text)
+    if not table["found"]:
+        result["skipped"] = "ledger table not found"
+        return result
+
+    rows = table["rows"]
+    by_slug = {}
+    for r in rows:
+        slug = _slug_from_detail(r["detail"])
+        if slug:
+            by_slug[slug] = r
+
+    changed = False
+
+    def _mark_updated(slug):
+        if slug not in result["updated"]:
+            result["updated"].append(slug)
+
+    # 2a. update existing rows (status forward + backfill approved/landed)
+    for slug, prop in proposals.items():
+        r = by_slug.get(slug)
+        if r is None:
+            continue
+        if _status_rank(prop["status"]) > _status_rank(r["status"]):
+            r["cells"][3] = prop["status"]
+            changed = True
+            _mark_updated(slug)
+        if prop["status"] in _FILLED_STATUSES:
+            if r["cells"][4].strip() in ("", _LEDGER_PLACEHOLDER):
+                r["cells"][4] = prop["author"]
+                changed = True
+                _mark_updated(slug)
+            if r["cells"][5].strip() in ("", _LEDGER_PLACEHOLDER):
+                r["cells"][5] = prop["date"]
+                changed = True
+                _mark_updated(slug)
+
+    # 2b. append rows for proposals not yet listed
+    existing_nums = [r["num"] for r in rows if r["num"] is not None]
+    next_num = (max(existing_nums) + 1) if existing_nums else 1
+    new_cells = []
+    for slug, prop in proposals.items():
+        if slug in by_slug:
+            continue
+        filled = prop["status"] in _FILLED_STATUSES
+        new_cells.append([
+            str(next_num), prop["date"], prop["title"], prop["status"],
+            prop["author"] if filled else _LEDGER_PLACEHOLDER,
+            prop["date"] if filled else _LEDGER_PLACEHOLDER,
+            "`" + prop["rel_path"] + "`",
+        ])
+        result["added"].append(slug)
+        next_num += 1
+        changed = True
+
+    if not changed:
+        return result
+
+    # 3. rebuild the table block and splice it back (robust vs in-place cell edits)
+    lines = text.splitlines()
+    header_txt = lines[table["header_line"]]
+    sep_txt = (lines[table["sep_line"]] if table["sep_line"] is not None
+               else "|---|------|-------|--------|-------------|--------|--------|")
+    kept = [r["cells"] for r in rows if not _is_placeholder_row(r)] + new_cells
+    rendered = [header_txt, sep_txt] + [_render_ledger_row(c) for c in kept]
+    new_lines = lines[:table["header_line"]] + rendered + lines[table["span_end"] + 1:]
+    new_text = "\n".join(new_lines) + ("\n" if text.endswith("\n") else "")
+
+    if not dry_run:
+        design_md.write_text(new_text, encoding="utf-8")
+    return result
+
+
 # ── PWA card ──────────────────────────────────────────────────────────────────
 
 def _esc(t):

@@ -48,6 +48,33 @@ The table at the bottom of `DESIGN.md`. One row per change, with a status:
 doc-index reads these statuses and shows open counts on the PWA card
 (e.g. `3 proposed · 1 approved awaiting land`).
 
+### Proposal file format (fixed)
+
+Each proposal is one file, `docs/10-next/PROPOSAL_<slug>.md` (moved to
+`docs/90-archive/` once implemented), with this fixed header:
+
+```
+# Proposal: <title>
+> Date: YYYY-MM-DD · Author: <name> · Status: <proposed|approved|landed|implemented|superseded>
+```
+
+`templates/PROPOSAL.template.md` is a ready-to-copy starting point.
+
+### Automatic ledger sync
+
+Every scan syncs these files into the ledger (when `proposal_ledger` is on):
+
+- a proposal with no ledger row yet gets one **appended**;
+- an existing row's status is **advanced forward** to match its file (never
+  backward);
+- once a proposal is `landed` or `implemented`, its row's **Approved by** is
+  auto-filled from the proposal's **Author** and **Landed** from its **Date**.
+
+The sync is idempotent and safe: it edits only the ledger table, rebuilds each
+row from parsed cells, and does nothing if it cannot find or parse the table.
+Both `docs/10-next/` and `docs/90-archive/` are scanned, so an already-archived
+proposal still backfills correctly.
+
 ### Enforcement is advisory, by design
 
 The gate is enforced by **convention + PWA visibility**, not by a pre-commit
