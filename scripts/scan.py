@@ -567,6 +567,54 @@ def render_manifest(cfg):
     }, ensure_ascii=False, indent=2)
 
 
+# ── Pre-scan Hooks ────────────────────────────────────────────────────────
+
+def run_pre_scan_hooks(cfg):
+    """Run pre-scan hooks defined in config before the index scan.
+
+    Hooks let projects run project-specific preparation scripts (e.g.
+    syncing a proposal ledger, pulling external data) before doc-index
+    scans the repo.  Each hook is a shell command; ${repo.path} is
+    expanded to the configured repo path.  A non-zero exit warns but
+    does not abort the scan.
+    """
+    hooks = cfg.get("pre_scan_hooks", [])
+    if not hooks:
+        return
+
+    repo_path = cfg["repo"]["path"]
+
+    for hook in hooks:
+        name = hook.get("name", "(unnamed hook)")
+        command = hook.get("command", "")
+        if not command:
+            print(f"  WARN: pre_scan_hook {name!r} has no command, skipping")
+            continue
+
+        # Variable expansion
+        command = command.replace("${repo.path}", repo_path)
+
+        print(f"\n→ Pre-scan hook: {name}")
+        print(f"  Running: {command}")
+        try:
+            r = subprocess.run(
+                command, shell=True, capture_output=True, text=True,
+                cwd=repo_path, timeout=120,
+            )
+            if r.stdout:
+                for line in r.stdout.strip().splitlines()[-8:]:
+                    print(f"  {line}")
+            if r.returncode != 0:
+                print(f"  WARNING: hook {name!r} exited {r.returncode}")
+                if r.stderr:
+                    for line in r.stderr.strip().splitlines()[-4:]:
+                        sys.stderr.write(f"  {line}\n")
+        except subprocess.TimeoutExpired:
+            print(f"  WARNING: hook {name!r} timed out (>2 min); skipping")
+        except Exception as e:
+            print(f"  WARNING: hook {name!r} failed to start: {e}")
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
@@ -584,6 +632,9 @@ def main():
     if not Path(repo_path).is_dir():
         print(f"ERROR: Repo path not found: {repo_path}")
         sys.exit(1)
+
+    # Run pre-scan hooks (project-specific scripts that prepare data before indexing)
+    run_pre_scan_hooks(cfg)
 
     print(f"Scanning: {repo_path}")
     sections = scan_repo(cfg)

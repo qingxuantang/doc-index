@@ -174,6 +174,18 @@ sync:
   author_name: ""                             # default: "doc-index-sync"
   author_email: ""                            # default: "noreply@doc-index.local"
 
+pre_scan_hooks: []                      # Scripts to run BEFORE the index scan.
+  # Use this to run project-specific preparation logic (e.g. syncing a
+  # proposal ledger, pulling data from an API, generating summary files)
+  # before doc-index scans the repo.  ${repo.path} is expanded to the
+  # configured repo path.  Hooks run in order; a non-zero exit warns
+  # but does not abort the scan.
+  #
+  # - name: "Sync Proposal Ledger"
+  #   command: "python3 ${repo.path}/sync_proposal_ledger.py"
+  # - name: "Pull External Data"
+  #   command: "python3 ${repo.path}/scripts/fetch-data.py"
+
 triggers:
   cron: ""                              # Cron expression, empty = disabled. e.g. "0 */6 * * *"
   manual: true                          # Always true — can always run scan.py manually
