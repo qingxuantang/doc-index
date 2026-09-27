@@ -125,6 +125,31 @@ the top of the PWA. The doc carries a **Proposal Ledger** so all changes flow
 Configured via the `design_doc:` block in `doc-index.yaml` (on by default; set
 `enabled: false` to opt out). Full convention: `DESIGN_DOC_CONVENTION.md`.
 
+### Publish design docs to the project's git repo
+
+`design_doc.publish` (off by default) auto-pushes the canonical `docs/DESIGN.md`
++ all `PROPOSAL_*.md` to the **project's own git repo**, so the design and full
+proposal history live beside the code and survive even if the PWA host is lost.
+It runs on `serve.py init` (first deploy) and at the end of every `scan.py`
+(keeps the repo copy current) — the two moments in `push_on`.
+
+- On an interactive `serve.py init`, doc-index **asks which repo** to publish to,
+  offering the detected `origin` when `repo.path` is already a git working tree.
+  A headless/cron init leaves publishing off.
+- Two modes: **in_place** (artifacts already sit in a checked-out git tree with a
+  remote → scoped commit + push there) and **remote** (clone/fetch a target repo,
+  copy the artifacts into `target_dir`, commit, push). `mode: auto` picks
+  in_place when possible.
+- **Safety:** a secret guard inspects the exact file set and **hard-fails the
+  whole publish** (pushes nothing) if any file is not a document or looks like a
+  secret (`.env`, `*.key/.pem`, `*.db/.sqlite`, token/credential files, …).
+  Commits are pathspec-scoped; never `git add -A`; tokens in an HTTPS URL are
+  redacted from logs. Keep tokens **out** of `doc-index.yaml` (use SSH or a git
+  credential helper). `author_name`/`author_email` empty → the repo's own git
+  identity is used.
+
+See the `design_doc.publish` block in `config.example.yaml` for all fields.
+
 ## What gets indexed (doc-only)
 
 Doc-index is **deliberately a documentation browser, not a code browser**. Its job: help someone glance at a project and understand the plan / spec / diagrams / notes — without ever opening source code.

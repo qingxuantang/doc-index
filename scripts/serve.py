@@ -170,6 +170,83 @@ def ensure_design_doc(cfg):
     return ok, f"[{action}] {msg}"
 
 
+def _fill_remote_publish(newpub):
+    """Interactively collect remote-mode publish settings."""
+    url = input("    Target repo URL (https or ssh): ").strip()
+    br = input("    Branch [main]: ").strip() or "main"
+    td = input("    Path inside the repo for the docs [docs]: ").strip() or "docs"
+    print("    NOTE: do NOT embed a token in the URL/config — it may get committed.")
+    print("          Use SSH, or a git credential helper / env var, so the token")
+    print("          stays out of doc-index.yaml.")
+    newpub.update({"mode": "remote", "remote_url": url, "branch": br, "target_dir": td})
+
+
+def setup_publish(cfg, config_path):
+    """Interactively configure design_doc.publish on first deploy.
+
+    Asks which git repo the design doc + proposals should be pushed to. Only
+    prompts at an interactive terminal; a headless/cron init leaves publishing
+    off (configure design_doc.publish.* manually to enable). Never guesses a
+    target repo — the target is always confirmed with the operator.
+    """
+    dd = cfg.get("design_doc") or {}
+    if not dd.get("enabled", True):
+        return True, "design doc disabled — publish setup skipped"
+    pub = dd.get("publish") or {}
+    if pub.get("enabled"):
+        return True, "publish already enabled in config — left as-is"
+    if not sys.stdin.isatty():
+        return True, ("non-interactive shell — publish left off "
+                      "(set design_doc.publish.* to enable)")
+
+    ans = input("  Auto-publish the design doc + proposals to a git repo? [y/N] ").strip().lower()
+    if ans not in ("y", "yes"):
+        return True, "declined — publishing stays off"
+
+    import git_publish as gp
+    repo_path = cfg["repo"]["path"]
+    is_repo, top, origin, branch = gp.detect_worktree(repo_path)
+    newpub = {"enabled": True, "push_on": ["init", "scan"], "soft_fail": True}
+    if is_repo and origin:
+        print(f"  Detected git working tree: {top}")
+        print(f"  origin: {gp.redact(origin)}   branch: {branch or 'main'}")
+        use = input(f"  Publish in place to this repo's '{branch or 'main'}'? [Y/n] ").strip().lower()
+        if use in ("", "y", "yes"):
+            newpub.update({"mode": "in_place", "branch": branch or "main"})
+        else:
+            _fill_remote_publish(newpub)
+    else:
+        print("  repo.path is not a git working tree with an origin remote.")
+        _fill_remote_publish(newpub)
+
+    newpub["author_name"] = input("  Commit author name (blank = use git's own identity): ").strip()
+    newpub["author_email"] = input("  Commit author email (blank = use git's own identity): ").strip()
+
+    dd = cfg.setdefault("design_doc", {})
+    dd["enabled"] = True
+    dd["publish"] = newpub
+    with open(config_path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(cfg, f, sort_keys=False, allow_unicode=True)
+    return True, f"publish configured (mode={newpub['mode']}, branch={newpub['branch']})"
+
+
+def run_publish_init(cfg, config_path):
+    """First-deploy publish (phase=init). Runs after the design doc + initial
+    scan exist. No-op unless design_doc.publish is enabled."""
+    cfg = load_config(config_path)   # reload — setup_publish may have rewritten it
+    dd = design_doc.dd_config(cfg)
+    if not (dd["enabled"] and design_doc.publish_config(dd)["enabled"]):
+        return True, "publish disabled — skipped"
+    if "init" not in design_doc.publish_config(dd)["push_on"]:
+        return True, "init not in push_on — skipped"
+    r = design_doc.publish(cfg, cfg["repo"]["path"], phase="init")
+    if r.get("error"):
+        return False, f"publish blocked: {r['error']}"
+    if r.get("pushed"):
+        return True, f"published to git ({r['mode']})"
+    return True, f"publish: {r.get('skipped')}"
+
+
 def run_initial_scan(cfg, config_path):
     """Run scan.py to generate initial index."""
     scan_script = Path(__file__).parent / "scan.py"
@@ -363,7 +440,9 @@ def cmd_init(config_path):
         ("Setup basic auth", lambda: setup_auth(cfg, config_path)),
         ("Setup cron", lambda: setup_cron(cfg, config_path)),
         ("Design doc", lambda: ensure_design_doc(cfg)),
+        ("Setup publish", lambda: setup_publish(cfg, config_path)),
         ("Initial scan", lambda: run_initial_scan(cfg, config_path)),
+        ("Publish design docs", lambda: run_publish_init(cfg, config_path)),
     ]
 
     all_ok = True

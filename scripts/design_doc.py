@@ -599,3 +599,126 @@ def _render_card(href, badge_cls, badge, meta, clickable):
         f'    {tag_close}\n'
         '</div>'
     )
+
+
+# ── publish: push design doc + proposals to the project's git repo ─────────────
+# Makes "the canonical design doc + all proposals also live in the project's own
+# git repo, kept current automatically" a first-class capability. Two modes:
+#   in_place — artifacts already sit in a checked-out git tree with a remote;
+#              scoped commit + push right there.
+#   remote   — artifacts must go to a repo that is not a local working tree;
+#              clone/fetch it, copy artifacts into target_dir, commit, push.
+# Safety: a secret guard (git_publish.secret_guard) HARD-fails the whole publish
+# before anything is staged; commits are pathspec-scoped; token URLs are redacted.
+
+def publish_config(dd):
+    """Normalized design_doc.publish config (with defaults)."""
+    pub = dict(dd.get("publish") or {})
+    pub.setdefault("enabled", False)
+    pub.setdefault("mode", "auto")            # auto | in_place | remote
+    pub.setdefault("branch", "main")
+    pub.setdefault("include", [])             # empty -> _default_includes(dd)
+    pub.setdefault("source_root", "")         # where artifacts live; default repo.path
+    pub.setdefault("repo_dir", "")            # in_place git tree; default source_root
+    pub.setdefault("remote_url", "")          # remote mode target
+    pub.setdefault("target_dir", "docs")      # remote mode path inside target repo
+    pub.setdefault("local_clone_dir", "")
+    pub.setdefault("push_on", ["init", "scan"])
+    pub.setdefault("commit_message_template",
+                   "doc-index: design doc + proposals ({project} @ {timestamp})")
+    pub.setdefault("author_name", "")         # empty -> use git env identity
+    pub.setdefault("author_email", "")
+    pub.setdefault("soft_fail", True)
+    return pub
+
+
+def _default_includes(dd):
+    """Default publish set = the design doc + every proposal .md."""
+    inc = [dd["path"]]
+    for d in _proposal_dirs(dd):
+        inc.append(f"{d}/**/*.md")
+    return inc
+
+
+def _expand_includes(source_root, globs):
+    """Resolve include globs (relative to source_root) to [(rel, abs)] file pairs."""
+    root = Path(source_root)
+    pairs, seen = [], set()
+    for g in globs:
+        for p in sorted(root.glob(g)):
+            if p.is_file():
+                rel = str(p.relative_to(root))
+                if rel not in seen:
+                    seen.add(rel)
+                    pairs.append((rel, str(p)))
+    return pairs
+
+
+def publish(cfg, repo_path, phase, dry_run=False):
+    """Publish the design doc + proposals to the project's git repo.
+
+    phase: 'init' (first deploy) or 'scan' (every rebuild). Runs only when
+    design_doc.publish.enabled and phase in push_on. Returns a result dict:
+    {pushed, skipped, error, mode}. Secret-guard hits set 'error' and publish
+    NOTHING (hard fail, even under soft_fail); network/push errors respect
+    soft_fail (default: swallow, don't break the scan)."""
+    import git_publish as gp
+
+    dd = dd_config(cfg)
+    pub = publish_config(dd)
+    result = {"pushed": False, "skipped": None, "error": None, "mode": None}
+
+    if not dd["enabled"] or not pub["enabled"]:
+        result["skipped"] = "disabled"
+        return result
+    if phase not in pub["push_on"]:
+        result["skipped"] = f"phase '{phase}' not in push_on"
+        return result
+
+    source_root = pub["source_root"] or repo_path
+    includes = pub["include"] or _default_includes(dd)
+    pairs = _expand_includes(source_root, includes)
+    if not pairs:
+        result["skipped"] = "no artifacts matched include globs"
+        return result
+
+    abs_files = [ab for _, ab in pairs]
+    viol = gp.secret_guard(abs_files)
+    if viol:
+        result["error"] = ("secret guard blocked publish (nothing pushed): "
+                           + "; ".join(f"{Path(p).name} — {r}" for p, r in viol))
+        return result
+
+    proj = cfg.get("project", {})
+    commit_msg = pub["commit_message_template"].format(
+        project=proj.get("name") or proj.get("short_name", "doc-index"),
+        timestamp=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
+    )
+
+    mode = pub["mode"]
+    if mode == "auto":
+        is_repo, _top, origin, _br = gp.detect_worktree(source_root)
+        mode = "in_place" if (is_repo and origin) else "remote"
+    result["mode"] = mode
+
+    try:
+        if mode == "in_place":
+            repo_dir = pub["repo_dir"] or source_root
+            is_repo, top, _origin, _br = gp.detect_worktree(repo_dir)
+            if not is_repo:
+                raise RuntimeError(f"in_place mode but not a git working tree: {repo_dir}")
+            r = gp.publish_in_place(top or repo_dir, abs_files, pub["branch"], commit_msg,
+                                    pub["author_name"], pub["author_email"], dry_run)
+        else:
+            short = proj.get("short_name", "doc-index")
+            clone_dir = (pub["local_clone_dir"]
+                         or str(Path.home() / ".cache" / "doc-index-publish" / short))
+            r = gp.publish_remote(pub["remote_url"], pub["branch"], pub["target_dir"], pairs,
+                                  commit_msg, pub["author_name"], pub["author_email"],
+                                  clone_dir, dry_run)
+        result.update(r)
+    except Exception as e:  # noqa: BLE001 — soft-fail is the contract
+        result["error"] = str(e)
+        if not pub["soft_fail"]:
+            raise
+    return result

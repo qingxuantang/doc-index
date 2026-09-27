@@ -794,6 +794,25 @@ def main():
         except Exception as e:
             print(f"  ! sync failed to start: {e}")
 
+    # Optional: publish the canonical design doc + proposals to the project's own
+    # git repo (design_doc.publish). No-op unless enabled. Secret-guarded + scoped.
+    # Soft-fail so a push problem never breaks the local index.
+    _pdd = design_doc.dd_config(cfg)
+    if _pdd["enabled"] and design_doc.publish_config(_pdd)["enabled"]:
+        print("\n→ Publishing design doc + proposals to git …")
+        try:
+            pr = design_doc.publish(cfg, repo_path, phase="scan")
+            if pr.get("error"):
+                # Secret-guard / config errors are loud, never silently green.
+                sys.stderr.write(f"  ✗ publish blocked: {pr['error']}\n")
+                print(f"  ✗ publish blocked: {pr['error']}")
+            elif pr.get("pushed"):
+                print(f"  ✓ published to git ({pr['mode']})")
+            else:
+                print(f"  · publish: {pr.get('skipped')}")
+        except Exception as e:  # pragma: no cover — belt-and-suspenders soft-fail
+            sys.stderr.write(f"  ! publish failed to run: {e}\n")
+
     print(f"\nDone. Updated at {datetime.now().strftime('%Y-%m-%d %H:%M')}")
 
 

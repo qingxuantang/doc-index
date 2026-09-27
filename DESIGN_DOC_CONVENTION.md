@@ -104,3 +104,22 @@ New projects get the gate by default. For a project already deployed before this
 existed, the same preflight runs the next time you `serve.py init` it; nothing is
 overwritten (Adopt/Incorporate are non-destructive). Set `design_doc.enabled:
 false` to opt a project out entirely.
+
+## Publishing to the project's git repo
+
+`design_doc.publish` (off by default) auto-pushes the design doc + all
+`PROPOSAL_*.md` to the project's own git repo, so the design + proposal history
+live beside the code and survive without the PWA. It runs on `serve.py init` and
+at the end of every `scan.py` (`push_on: [init, scan]`).
+
+- Interactive `serve.py init` asks which repo to publish to (offering the
+  detected `origin` when `repo.path` is a git working tree); a headless init
+  leaves it off.
+- Modes: `in_place` (scoped commit + push inside an existing working tree) or
+  `remote` (clone/fetch a target repo, copy artifacts into `target_dir`, push).
+  `mode: auto` chooses. `source_root`/`repo_dir` decouple the two when
+  `repo.path` is a staging root separate from the real repo.
+- A **secret guard** hard-fails the whole publish (pushes nothing) if the file
+  set contains anything that is not a document or looks like a secret. Commits
+  are pathspec-scoped; keep tokens out of `doc-index.yaml`. See
+  `config.example.yaml` for the full `design_doc.publish` block.

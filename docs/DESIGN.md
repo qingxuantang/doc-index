@@ -59,6 +59,7 @@ Every change lands here before it is built. Active detail files live in
 | # | Date | Title | Status | Approved by | Landed | Detail |
 |---|------|-------|--------|-------------|--------|--------|
 | 1 | 2026-09-14 | Design Doc Gate (v1) | implemented | maintainer | yes | [PROPOSAL](90-archive/PROPOSAL_design-doc-gate.md) |
+| 2 | 2026-09-27 | design_doc.publish — auto-push design doc + proposals to the project's git repo | implemented | maintainer | 2026-09-27 | `docs/90-archive/PROPOSAL_git-publish-design-docs.md` |
 
 <!--
 Status values (in order):

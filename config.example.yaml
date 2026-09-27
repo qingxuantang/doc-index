@@ -81,6 +81,46 @@ design_doc:
     generator: ""                       # path to a project-specific snapshot generator (optional)
     max_age_h: 25                       # snapshot older than this -> red (feeds the freshness check)
 
+  publish:
+    # Auto-push the canonical design doc + proposals to the PROJECT'S OWN git repo,
+    # so the design + full proposal history live beside the code and survive even
+    # if the PWA host is lost. Runs on `serve.py init` (first deploy) and at the
+    # end of every `scan.py` (keeps the repo copy current). Off by default.
+    #
+    # On `serve.py init` at an interactive terminal, doc-index ASKS which repo to
+    # publish to (offering the detected `origin` if repo.path is already a git
+    # working tree) and writes the answer here. A headless/cron init leaves it off.
+    #
+    # SAFETY: before staging anything, a secret guard inspects the exact file set
+    # and HARD-FAILS the whole publish (pushes nothing) if any file is not a
+    # document or looks like a secret (.env, *.key/.pem, *.db/.sqlite, token/
+    # credential files, ...). Commits are pathspec-scoped; tokens in an HTTPS
+    # remote URL are redacted from logs.
+    enabled: false
+    mode: auto                          # auto | in_place | remote
+                                        #   auto: in_place when source_root is a git
+                                        #   working tree with an origin, else remote
+    branch: main
+    include: []                         # globs relative to source_root; empty ->
+                                        #   [design_doc.path] + docs/10-next/**/*.md
+                                        #   + docs/90-archive/**/*.md
+    # --- in_place mode (artifacts already live in a checked-out git tree) ---
+    source_root: ""                     # where the artifacts live (default: repo.path)
+    repo_dir: ""                        # git working tree to commit in (default: source_root)
+                                        #   set both when repo.path is a safe-serving
+                                        #   staging root decoupled from the real repo
+    # --- remote mode (push to a repo that is not a local working tree) ---
+    remote_url: ""                      # e.g. git@github.com:org/proj.git  (NO token in here)
+    target_dir: "docs"                  # path inside the target repo to place the artifacts
+    local_clone_dir: ""                 # default ~/.cache/doc-index-publish/<short_name>
+    # --- common ---
+    push_on: [init, scan]               # when to publish
+    commit_message_template: "doc-index: design doc + proposals ({project} @ {timestamp})"
+    author_name: ""                     # empty -> use the repo's own git identity
+    author_email: ""                    # empty -> use the repo's own git identity
+    soft_fail: true                     # push/network errors log but don't break scan
+                                        #   (a secret-guard hit is always a hard fail)
+
 quick_links: []                         # Shortcut links at top of page
   # - label: "Project Homepage"
   #   url: "https://example.com"
