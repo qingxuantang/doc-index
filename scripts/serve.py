@@ -485,7 +485,7 @@ def cmd_init(config_path):
             ("Check nginx", lambda: check_nginx()),
             ("Check repo", lambda: check_repo(cfg["repo"]["path"])),
             ("Create serve dir", lambda: create_serve_dir(cfg["serve"]["root"])),
-            ("Create docs symlink", lambda: create_docs_symlink(cfg["serve"]["root"], cfg["repo"]["path"])),
+            ("Create docs mount", lambda: materialize_docs(cfg["serve"]["root"], cfg["repo"]["path"], cfg)),
             ("Generate icons", lambda: generate_icons(cfg["serve"]["root"], cfg)),
             ("Copy templates", lambda: copy_templates(cfg["serve"]["root"])),
             ("Setup basic auth", lambda: setup_auth(cfg, config_path)),

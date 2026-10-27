@@ -48,9 +48,10 @@ any server.
 - **Basic auth is ON by default.** It is an nginx-mode guarantee; `local` mode
   has no auth by design (its boundary: want security → use nginx).
 - **`serve.mode` defaults to `nginx`.** Local is opt-in — flipping the default
-  would silently change every existing deployment. The local-mode content copy
-  excludes `repo.ignore`, so `.git`/`.env` are never materialized into
-  `serve.root`.
+  would silently change every existing deployment. The `content: copy` strategy
+  (local's default, also usable in nginx mode when the repo isn't nginx-readable,
+  e.g. under `/root`) re-syncs on every scan and excludes `repo.ignore`, so
+  `.git`/`.env` are never materialized into `serve.root`.
 - **Sync soft-fails.** A shared-repo push failure never breaks the local PWA.
 - **Absence is a signal.** Missing/stale artifacts (design doc, snapshot) are
   reported, never silently green.

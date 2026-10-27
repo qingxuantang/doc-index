@@ -797,11 +797,13 @@ def main():
                 shutil.copy2(src, dst)
             print(f"Copied: {dst}")
 
-    # Populate serve.root/docs. In local/copy mode, materialize a real copy
-    # (portable + always current). Otherwise rely on the docs symlink that
-    # serve.py init creates, and warn loudly if it is missing.
+    # Populate serve.root/docs. With content=copy (local mode's default, but
+    # also valid in nginx mode when the repo isn't readable where nginx serves —
+    # e.g. a repo under /root), materialize a real copy and keep it current on
+    # every scan. Otherwise rely on the docs symlink serve.py init creates, and
+    # warn loudly if it is missing.
     docs_link = out_dir / "docs"
-    if serve_mode(cfg) == "local" and content_strategy(cfg) == "copy":
+    if content_strategy(cfg) == "copy":
         n = sync_docs_copy(repo_path, docs_link, cfg["repo"].get("ignore", []))
         print(f"Synced docs copy: {n} files → {docs_link}")
     elif not docs_link.exists():

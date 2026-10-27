@@ -52,7 +52,7 @@ serve:
   # --- local mode only ---
   bind_host: 127.0.0.1                           # 127.0.0.1 = this box only; 0.0.0.0 = whole LAN (see security note)
   bind_port: 8099                                # port for `serve.py serve`
-  content: copy                                  # copy (default for local; portable) | symlink (default for nginx; auto-follows repo)
+  content: copy                                  # copy (default for local; portable; also use in nginx mode when the repo isn't nginx-readable, e.g. under /root) | symlink (default for nginx; auto-follows repo)
   # NOTE (local mode): no auth, http.server is dev-grade. 0.0.0.0 exposes
   # serve.root to the LAN — keep sensitive docs on 127.0.0.1 or use nginx+auth.
   base_font_px: 16                               # Root font size (px). One knob: every font-size
