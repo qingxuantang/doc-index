@@ -17,6 +17,7 @@ from pathlib import Path
 import yaml
 
 import design_doc
+import scan
 
 
 def load_config(path):
@@ -75,6 +76,36 @@ def create_docs_symlink(serve_root, repo_path):
 
     os.symlink(repo_path, docs_link)
     return True, f"Created symlink: docs -> {repo_path}"
+
+
+def materialize_docs(serve_root, repo_path, cfg):
+    """Populate serve_root/docs per the content strategy.
+
+    nginx/symlink -> the existing symlink (auto-follows the repo).
+    local/copy    -> a real, portable copy (see scan.sync_docs_copy), with the
+                     repo's ignore patterns applied so secrets/.git are not
+                     materialized into serve_root.
+    """
+    strategy = scan.content_strategy(cfg)
+    if strategy == "copy":
+        n = scan.sync_docs_copy(
+            repo_path,
+            Path(serve_root) / "docs",
+            cfg.get("repo", {}).get("ignore", []),
+        )
+        return True, f"Materialized docs copy: {n} files (strategy=copy)"
+    return create_docs_symlink(serve_root, repo_path)
+
+
+def _print_local_security_note(host):
+    """Loud, honest banner for local/internal-network serving."""
+    print("  ⚠ Local mode has NO auth, and http.server is dev-grade "
+          "(single-threaded, no TLS).")
+    if host in ("0.0.0.0", "::"):
+        print("    Binding to all interfaces exposes serve.root to the entire "
+              "LAN. Keep sensitive")
+        print("    content on 127.0.0.1, or serve it via nginx + basic auth "
+              "instead.")
 
 
 def generate_icons(serve_root, cfg):
@@ -426,24 +457,44 @@ server {{
 
 
 def cmd_init(config_path):
-    """Full initialization."""
+    """Full initialization. Branches on serve.mode: 'nginx' (default) keeps the
+    full public-deploy flow unchanged; 'local' skips the nginx check, basic auth
+    and server-block print, and serves from a real copy instead of a symlink."""
     cfg = load_config(config_path)
-    print(f"=== Doc Index Init: {cfg['project']['name']} ===\n")
+    mode = scan.serve_mode(cfg)
+    print(f"=== Doc Index Init: {cfg['project']['name']} (mode={mode}) ===\n")
 
-    steps = [
-        ("Check nginx", lambda: check_nginx()),
-        ("Check repo", lambda: check_repo(cfg["repo"]["path"])),
-        ("Create serve dir", lambda: create_serve_dir(cfg["serve"]["root"])),
-        ("Create docs symlink", lambda: create_docs_symlink(cfg["serve"]["root"], cfg["repo"]["path"])),
+    tail = [
         ("Generate icons", lambda: generate_icons(cfg["serve"]["root"], cfg)),
         ("Copy templates", lambda: copy_templates(cfg["serve"]["root"])),
-        ("Setup basic auth", lambda: setup_auth(cfg, config_path)),
         ("Setup cron", lambda: setup_cron(cfg, config_path)),
         ("Design doc", lambda: ensure_design_doc(cfg)),
         ("Setup publish", lambda: setup_publish(cfg, config_path)),
         ("Initial scan", lambda: run_initial_scan(cfg, config_path)),
         ("Publish design docs", lambda: run_publish_init(cfg, config_path)),
     ]
+
+    if mode == "local":
+        steps = [
+            ("Check repo", lambda: check_repo(cfg["repo"]["path"])),
+            ("Create serve dir", lambda: create_serve_dir(cfg["serve"]["root"])),
+            ("Materialize docs", lambda: materialize_docs(cfg["serve"]["root"], cfg["repo"]["path"], cfg)),
+        ] + tail
+    else:
+        steps = [
+            ("Check nginx", lambda: check_nginx()),
+            ("Check repo", lambda: check_repo(cfg["repo"]["path"])),
+            ("Create serve dir", lambda: create_serve_dir(cfg["serve"]["root"])),
+            ("Create docs symlink", lambda: create_docs_symlink(cfg["serve"]["root"], cfg["repo"]["path"])),
+            ("Generate icons", lambda: generate_icons(cfg["serve"]["root"], cfg)),
+            ("Copy templates", lambda: copy_templates(cfg["serve"]["root"])),
+            ("Setup basic auth", lambda: setup_auth(cfg, config_path)),
+            ("Setup cron", lambda: setup_cron(cfg, config_path)),
+            ("Design doc", lambda: ensure_design_doc(cfg)),
+            ("Setup publish", lambda: setup_publish(cfg, config_path)),
+            ("Initial scan", lambda: run_initial_scan(cfg, config_path)),
+            ("Publish design docs", lambda: run_publish_init(cfg, config_path)),
+        ]
 
     all_ok = True
     for step_name, step_fn in steps:
@@ -454,14 +505,63 @@ def cmd_init(config_path):
             all_ok = False
 
     print()
-    print_nginx_config(cfg)
-
-    if all_ok:
-        print("=== Init complete! ===")
-        print(f"Site: {cfg['serve'].get('url_base', '/')}")
-        print("Add the nginx config above, then reload: sudo nginx -s reload")
+    if mode == "local":
+        host = cfg["serve"].get("bind_host", "127.0.0.1")
+        port = cfg["serve"].get("bind_port", 8099)
+        tag = "complete" if all_ok else "completed with errors — check FAIL items above"
+        print(f"=== Init {tag} (local mode) ===")
+        print(f"Serve it:  python3 serve.py serve {config_path}")
+        print(f"Then open: http://{host}:{port}/")
+        _print_local_security_note(host)
     else:
-        print("=== Init completed with errors — check FAIL items above ===")
+        print_nginx_config(cfg)
+        if all_ok:
+            print("=== Init complete! ===")
+            print(f"Site: {cfg['serve'].get('url_base', '/')}")
+            print("Add the nginx config above, then reload: sudo nginx -s reload")
+        else:
+            print("=== Init completed with errors — check FAIL items above ===")
+
+
+def cmd_serve(config_path, host_override=None, port_override=None):
+    """Serve serve.root over http.server (local / internal-network mode)."""
+    import functools
+    import http.server
+    import socketserver
+
+    cfg = load_config(config_path)
+    serve_cfg = cfg.get("serve", {})
+    serve_root = serve_cfg["root"]
+    host = host_override or serve_cfg.get("bind_host", "127.0.0.1")
+    port = int(port_override or serve_cfg.get("bind_port", 8099))
+
+    if not Path(serve_root).is_dir():
+        print(f"ERROR: serve.root not found: {serve_root}")
+        print(f"  Run first: python3 serve.py init {config_path}")
+        sys.exit(1)
+
+    handler = functools.partial(
+        http.server.SimpleHTTPRequestHandler, directory=serve_root
+    )
+
+    class _Server(socketserver.TCPServer):
+        allow_reuse_address = True
+
+    print(f"Serving {serve_root}")
+    print(f"  → http://{host}:{port}/")
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        print("  LAN devices: reach it at this host's IP:port "
+              "(open the firewall for the port).")
+    _print_local_security_note(host)
+    print("  Ctrl-C to stop.")
+    try:
+        with _Server((host, port), handler) as httpd:
+            httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("\nStopped.")
+    except OSError as e:
+        print(f"ERROR: could not bind {host}:{port} — {e}")
+        sys.exit(1)
 
 
 def cmd_status(config_path):
@@ -473,8 +573,8 @@ def cmd_status(config_path):
         ("nginx", check_nginx()),
         ("repo", check_repo(cfg["repo"]["path"])),
         ("serve dir", (Path(cfg["serve"]["root"]).is_dir(), cfg["serve"]["root"])),
-        ("docs symlink", (
-            (Path(cfg["serve"]["root"]) / "docs").is_symlink(),
+        ("docs mount", (
+            (Path(cfg["serve"]["root"]) / "docs").exists(),
             str(Path(cfg["serve"]["root"]) / "docs")
         )),
         ("index.html", (
@@ -517,6 +617,7 @@ def main():
     if len(sys.argv) < 3:
         print("Usage:")
         print("  python3 serve.py init <config.yaml>")
+        print("  python3 serve.py serve <config.yaml> [--host H] [--port P]")
         print("  python3 serve.py status <config.yaml>")
         print("  python3 serve.py nginx <config.yaml>")
         print("  python3 serve.py reset-auth <config.yaml>")
@@ -531,6 +632,19 @@ def main():
 
     if command == "init":
         cmd_init(config_path)
+    elif command == "serve":
+        host = port = None
+        rest = sys.argv[3:]
+        i = 0
+        while i < len(rest):
+            if rest[i] == "--host" and i + 1 < len(rest):
+                host = rest[i + 1]; i += 2
+            elif rest[i] == "--port" and i + 1 < len(rest):
+                port = rest[i + 1]; i += 2
+            else:
+                print(f"Unknown serve argument: {rest[i]!r}")
+                sys.exit(1)
+        cmd_serve(config_path, host, port)
     elif command == "status":
         cmd_status(config_path)
     elif command == "nginx":

@@ -33,10 +33,17 @@ def validate_hex_color(value, field_name="color"):
 
 
 def validate_url_base(value):
-    """Validate url_base is a safe path prefix."""
-    if not re.match(r'^/[a-zA-Z0-9/_.-]*/$', value):
+    """Validate url_base is a safe path prefix.
+
+    Accepts a bare "/" (no URL prefix — the local/root-serve case) as well as
+    "/path/". The pattern is a strict superset of the old one: "/", "/x/" and
+    "/x/y/" all pass, while "/x" (missing the trailing slash) is still rejected,
+    so every previously-valid value stays valid.
+    """
+    if not re.match(r'^/([A-Za-z0-9/_.-]*/)?$', value):
         raise ValueError(
-            f"Invalid url_base: {value!r} (must match /path/ with only alphanumeric, /, _, ., -)")
+            f"Invalid url_base: {value!r} (must be '/' or '/path/' with only "
+            "alphanumeric, /, _, ., -)")
     return value
 
 
@@ -65,6 +72,57 @@ def should_ignore(name, patterns):
         if fnmatch(name, pat):
             return True
     return False
+
+
+def serve_mode(cfg):
+    """Deployment target: 'local' (bind an http.server) or 'nginx' (default)."""
+    return (cfg.get("serve", {}).get("mode") or "nginx").strip().lower()
+
+
+def content_strategy(cfg):
+    """How serve.root/docs is populated: 'symlink' or 'copy'.
+
+    Defaults from the mode: nginx -> symlink (auto-follows the repo), local ->
+    copy (a real copy that is portable across filesystems / namespaces and does
+    not depend on the repo's absolute path resolving where the site is served).
+    """
+    explicit = cfg.get("serve", {}).get("content")
+    if explicit:
+        return explicit.strip().lower()
+    return "copy" if serve_mode(cfg) == "local" else "symlink"
+
+
+def sync_docs_copy(repo_path, dest, ignore_patterns):
+    """Materialize a real copy of repo_path into dest/, excluding ignore
+    patterns (same semantics as scanning: basename fnmatch). Returns the number
+    of files in the resulting tree.
+
+    Used by local/copy mode so the served tree is self-contained and always
+    current after a scan — no absolute-path symlink, no manual rsync step.
+    """
+    import shutil
+    src, dest = Path(repo_path), Path(dest)
+    # A pre-existing `docs` symlink (e.g. from a prior nginx-mode init) must be
+    # removed first — never copy/rsync *through* it into the repo itself.
+    if dest.is_symlink():
+        dest.unlink()
+    rsync = shutil.which("rsync")
+    if rsync:
+        dest.mkdir(parents=True, exist_ok=True)
+        cmd = [rsync, "-a", "--delete"]
+        for pat in ignore_patterns:
+            cmd += ["--exclude", pat]
+        cmd += [f"{src}/", f"{dest}/"]
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+    else:
+        if dest.exists():
+            shutil.rmtree(dest)
+
+        def _ignore(_dirpath, names):
+            return {n for n in names if should_ignore(n, ignore_patterns)}
+
+        shutil.copytree(src, dest, ignore=_ignore, symlinks=False)
+    return sum(1 for p in dest.rglob("*") if p.is_file())
 
 
 def get_file_type(ext):
@@ -739,9 +797,14 @@ def main():
                 shutil.copy2(src, dst)
             print(f"Copied: {dst}")
 
-    # Check if docs symlink exists
+    # Populate serve.root/docs. In local/copy mode, materialize a real copy
+    # (portable + always current). Otherwise rely on the docs symlink that
+    # serve.py init creates, and warn loudly if it is missing.
     docs_link = out_dir / "docs"
-    if not docs_link.exists():
+    if serve_mode(cfg) == "local" and content_strategy(cfg) == "copy":
+        n = sync_docs_copy(repo_path, docs_link, cfg["repo"].get("ignore", []))
+        print(f"Synced docs copy: {n} files → {docs_link}")
+    elif not docs_link.exists():
         print(f"\nWARNING: {docs_link} does not exist.")
         print(f"  Run: ln -s {repo_path} {docs_link}")
         print(f"  Or run: python3 serve.py init {config_path}")

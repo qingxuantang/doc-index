@@ -107,6 +107,44 @@ sudo certbot --nginx -d docs.example.com     # SSL
 Open the configured URL on your phone/tablet (login with auth credentials), install as PWA.
 Add a row to the **Project Registry** above so this skill can route `更新索引` to it later.
 
+## Two deployment modes: local vs nginx
+
+`serve.mode` picks the deployment target (default `nginx`):
+
+- **`nginx`** (default) — the public flow above: nginx location + basic auth + a
+  domain, with `serve.root/docs` a symlink that auto-follows the repo.
+- **`local`** — run an HTTP server right on this box (or the LAN), no nginx, no
+  domain, no auth. The repo is materialized as a **real copy** under
+  `serve.root/docs` (portable across filesystems — e.g. a container-generated
+  site served from WSL — and re-synced automatically on every scan).
+
+Local quickstart:
+
+```yaml
+# doc-index.yaml
+serve:
+  mode: local
+  root: /path/to/site        # keep OUTSIDE the repo (avoids indexing itself)
+  url_base: "/"              # root serve — no prefix
+  bind_host: 127.0.0.1       # 0.0.0.0 to share on the LAN (read the note below)
+  bind_port: 8099
+```
+
+```bash
+python3 scripts/serve.py init  /path/to/doc-index.yaml   # build (skips nginx/auth)
+python3 scripts/serve.py serve /path/to/doc-index.yaml   # start the server
+# → http://127.0.0.1:8099/   (override with --host 0.0.0.0 --port 8099)
+```
+
+> **Security:** local mode has **no auth** and `http.server` is dev-grade
+> (single-threaded, no TLS). Binding `0.0.0.0` exposes `serve.root` to the whole
+> LAN — keep sensitive content on `127.0.0.1`, or serve it through nginx + basic
+> auth instead. The copy excludes `repo.ignore` (`.git`, `.env`, …) so those are
+> never materialized into `serve.root`.
+>
+> Chinese filenames render correctly through the viewers (UTF-8 `fetch`); they
+> only misrender if you hand-edit the URL to open a raw `.md` outside the viewer.
+
 ## Daily Usage
 
 ### Manual update

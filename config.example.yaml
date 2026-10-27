@@ -45,9 +45,16 @@ repo:
     - .venv
 
 serve:
+  mode: nginx                                    # nginx (default, public) | local (bind an http.server on this box / LAN)
   root: /usr/share/nginx/html/your-project-docs  # Output directory for generated site
-  url_base: /your-project-docs/                  # URL path prefix (for nginx location)
+  url_base: /your-project-docs/                  # URL path prefix (nginx location). LOCAL mode: use "/"
   domain: ""                                     # REQUIRED for full server block — e.g. "docs.example.com"
+  # --- local mode only ---
+  bind_host: 127.0.0.1                           # 127.0.0.1 = this box only; 0.0.0.0 = whole LAN (see security note)
+  bind_port: 8099                                # port for `serve.py serve`
+  content: copy                                  # copy (default for local; portable) | symlink (default for nginx; auto-follows repo)
+  # NOTE (local mode): no auth, http.server is dev-grade. 0.0.0.0 exposes
+  # serve.root to the LAN — keep sensitive docs on 127.0.0.1 or use nginx+auth.
   base_font_px: 16                               # Root font size (px). One knob: every font-size
                                                  # is a rem off this; mobile (<=480px) gets +1px.
                                                  # Bump to 17-18 for larger text. Default 16.
