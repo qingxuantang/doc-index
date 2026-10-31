@@ -1,8 +1,8 @@
 # doc-index — 项目文档索引 PWA 生成器
 
-从任意项目仓库的目录结构生成一个可安装为 PWA 的文档索引网站。手机 / 平板上看一眼，就能知道项目的规划 / 规格 / 图表 / 笔记长什么样——**不暴露源代码**。
+为任意项目生成人类用户友好的文档索引站。**AI 的每一次优化升级更新都以提案（proposal）形式记录在案**，走 Proposal → Approved → Landed → Implemented 的闸口，方便实现 human-in-the-loop 的开发模式。Markdown / Office / PDF 都能在页面内直接打开——**不暴露源代码**。
 
-通过 nginx 服务 + basic auth（默认 ON）。一份 `config.yaml` 跑整个流程。
+通过 nginx 服务 + basic auth（默认 ON），或本地 / 内网直接 serve。一份 `config.yaml` 跑整个流程。
 
 [English README](./README.md) · [简体中文](./README_CN.md) · MIT 协议
 

@@ -1,7 +1,7 @@
 ---
 name: doc-index
 description: |
-  Generate or refresh a project document index PWA. Scans a project repo's filesystem (including untracked files) and produces a mobile-friendly doc browser served via nginx with basic auth (on by default), installable as a PWA. Config-driven — drop into any project on any server.
+  Generate a human-friendly documentation index PWA for any project — and make every AI optimization and upgrade a logged proposal (Proposal → Approved → Landed → Implemented), so development stays human-in-the-loop. Scans the repo filesystem (including untracked files); Markdown / Office / PDF open inline in the page. Served via nginx with basic auth (on by default) or locally. Config-driven — drop into any project on any server.
 
   **AUTO-INVOKE this skill (do NOT run scan.py directly via Bash) when the user says any of**:
   - 中文触发：更新索引 / 更新文档索引 / 刷新文档站 / 扫一下文档 / 重新扫文档 / 把 X 加到索引 / X 怎么没显示在网页上 / 把这个文档放到索引 / 索引文档更新 / 同步索引 / 文档站再扫一遍 / 索引怎么没看到
@@ -13,7 +13,7 @@ description: |
 
 # Doc Index — Project Document Index Generator
 
-Generate / maintain a PWA document index website from any project repo's folder structure.
+Generate a human-friendly PWA document index for any project repo — where every AI optimization and upgrade is recorded as a proposal (Proposal → Approved → Landed → Implemented), keeping development human-in-the-loop. Markdown / Office / PDF open inline.
 
 [English README](./README.md) · [简体中文](./README_CN.md) · MIT licensed
 

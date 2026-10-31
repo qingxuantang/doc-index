@@ -10,8 +10,11 @@
 
 ## What this project is
 
-doc-index turns any project repo's folder of documents into a mobile-friendly,
-installable PWA document browser. It serves two ways (`serve.mode`): **nginx**
+doc-index turns any project repo's folder of documents into a human-friendly,
+installable PWA document browser. Its **core value** is the governance loop:
+**every AI optimization or upgrade is recorded as a proposal** and moves
+Proposal → Approved → Landed → Implemented before it ships, so a human stays in
+the loop over what the AI changes. It serves two ways (`serve.mode`): **nginx**
 behind basic auth on a public domain (default), or **local** — a plain
 `http.server` bound to this box or the LAN, no nginx/domain/auth. It is
 deliberately a **documentation** browser, not a code browser: a positive
@@ -72,6 +75,7 @@ Every change lands here before it is built. Active detail files live in
 | 1 | 2026-09-14 | Design Doc Gate (v1) | implemented | maintainer | yes | [PROPOSAL](90-archive/PROPOSAL_design-doc-gate.md) |
 | 2 | 2026-09-27 | design_doc.publish — auto-push design doc + proposals to the project's git repo | implemented | maintainer | 2026-09-27 | `docs/90-archive/PROPOSAL_git-publish-design-docs.md` |
 | 3 | 2026-10-27 | serve.mode — local / internal-network serving as a first-class option | implemented | maintainer | 2026-10-27 | `docs/90-archive/PROPOSAL_local-serve-mode.md` |
+| 4 | 2026-10-31 | Foreground the human-in-the-loop proposal ledger as doc-index's core value | implemented | maintainer | 2026-10-31 | `docs/90-archive/PROPOSAL_core-value-human-in-the-loop.md` |
 
 <!--
 Status values (in order):
